@@ -80,3 +80,53 @@
 
     I think the fancy parsing should be left to last.
 --]]
+
+hexchat.register(
+  "SpecialSounds",
+  "0.0.1",
+  "Set special sound to play on message"
+)
+
+local function set_sound (server_name, channel_name, sound_file, match)
+  print("Hello")
+end
+
+---[===[
+-- Debugging
+local function print_hook_args (...)
+  local arg = {...}
+  for i,val in ipairs(arg) do
+    print("arg "..tostring(i))
+    for subi,subval in ipairs(val) do
+      print("item "..tostring(subi).." val: "..subval)
+    end
+  end
+  return hexchat.EAT_HEXCHAT
+end
+--]===]
+
+hexchat.hook_command("SSOUND", print_hook_args, [[
+DESCRIPTION
+
+Watch for message matching [match] in specific server and channel, and play sound with /SPLAY on match
+/SSOUND [server name] #[channel name] sound [sound file] match [match]
+
+If any of [server name], [channel name], [sound file], or [match] have spaces, they must be wrapped in parenthesis.
+Note that the channel name will have the # on the outside of the parenthesis.
+
+The [match] must be a Lua pattern: https://www.lua.org/pil/20.2.html
+
+EXAMPLES
+
+Play sound from D:\friend.wav when your friends name is mentioned:
+/SSOUND freenode #irc sound D:\friend.wav match friends_nick
+
+Show all sounds set for server freenode channel #irc:
+/SSOUND freenode #irc
+
+Set the sound file to (D:\attention attention.wav) for any channel with "help" in the name:
+/SSOUND #(.*help.*) sound (D:\attention attention.wav)
+Note, this will not play the sound, as no match has been specified yet:
+/SSOUND #(.*help.*) match (%?)
+Now it will match anything with a question mark in it.
+]])
