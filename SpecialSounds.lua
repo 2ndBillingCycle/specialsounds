@@ -238,21 +238,32 @@ local function print_hook_args (...)
 end
 --]===]
 
--- Command for configuration  
+-- Set the function to be called when the command is invoked, and the help text
 hexchat.hook_command(command_name, hook_command, [[
 DESCRIPTION
 
-Watch for message matching [match] in specific server and channel, and play sound with /SPLAY on match
+This command helps configure this plugin so that when a message is received that matches [match] in specific
+server and channel, a sound is played using the HexChat /SPLAY command.
+
+The command syntax follows this format:
 /SSOUND [server name] #[channel name] sound [sound file] match [match]
 
 If any of [server name], [channel name], [sound file], or [match] have spaces, they must be wrapped in parenthesis.
 Note that the channel name will have the # on the outside of the parenthesis.
+If there are parenthesis in any of them, the parenthesis need to be escaped with the %.
 
-The [match] must be a Lua pattern: https://www.lua.org/pil/20.2.html
+Example:
+
+/SSOUND (my server) #(a channel) sound (H:\this sound.wav) match (%(word%))
+
+The [match] is interpreted as a Lua pattern: https://www.lua.org/pil/20.2.html
+
+Note that in the example, the match matches the literal text "word", with the full pattern as seen by Lua being:
+(word)
 
 EXAMPLES
 
-Play sound from D:\friend.wav when your friends name is mentioned:
+Play sound from D:\friend.wav when your friend's name is mentioned:
 /SSOUND freenode #irc sound D:\friend.wav match friends_nick
 
 Show all sounds set for server freenode channel #irc:
