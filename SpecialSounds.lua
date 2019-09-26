@@ -1,99 +1,232 @@
 --[[
-    Goal: Provide a new command, /SSOUND, that:
-     - Remembers an association of a sound file with a server+channel
-     - Remembers a Lua pattern associated with a server+channel
-     - Plays the sound file when a message is received that matches that regexp
-
-    API examples:
-    /SSOUND freenode #irc sound C:\Users\Public\Music\my_friend.wav
-    > Server freenode channel #irc
-    > Sound: C:\Users\Public\Music\my_friend.wav
-    > Match: ()
-    /SSOUND freenode #irc match friends_nick
-    > Server freenode channel #irc
-    > Sound: C:\Users\Public\Music\my_friend.wav
-    > Match: friends_nick
-    /SSOUND freenode sound C:\Users\Public\Music\slam_dunk.wav match (got dunked on)
-    > Server freenode channel #(.*)
-    > Sound: C:\Users\Public\Music\slam_dunk.wav
-    > Match: (got dunked on)
-    /SSOUND (.*node.*) #(irc%-.+) sound H:\crickets.wav match (very strange)
-    > Server (.*node.*) channel #(irc%-.+)
-    > Sound: H:\crickets.wav
-    > Match: (very strange)
-        /SSOUND freenode
-    > Server freenode channel #irc
-    > Sound: C:\Users\Public\Music\my_friend.wav
-    > Match: friends_nick
-    > Server freenode channel #(.*)
-    > Sound: C:\Users\Public\Music\slam_dunk.wav
-    > Match: (got dunked on)
-    /SSOUND freenod
-    > No settings found for server "freenod"
-    /SSOUND (.*.*)
-    > No settings found for server "(.*.*)"
-    /SSOUND (.*)
-    > Server freenode channel #irc
-    > Sound: C:\Users\Public\Music\my_friend.wav
-    > Match: friends_nick
-    > Server freenode channel #(.*)
-    > Sound: C:\Users\Public\Music\slam_dunk.wav
-    > Match: (got dunked on)
-    > Server (.*node.*) channel #(irc%-.+)
-    > Sound: H:\crickets.wav
-    > Match: (very strange)
-    /SSOUND sound H:\rand.wav match (.*)
-    > Server (.*) channel #(.*)
-    > Sound: H:\rand.wav
-    > Match: (.*)
-    /SSOUND match ()
-
-    This is starting to look like I'm forcing myself into writing a parser
-    I think a greatly simplified parser is in order, but one without such a broad grammar.
-    Solution is error messages:
-    /SSOUND #(irc%-.+) sound H:\crickets.wav match (very strange)
-    > Error: No server name
-    /SSOUND #(irc%-.+) sound H:\crickets.wav match (very strange)
-    > Error: No channel name
-
-    Format something like:
-     - All of server name, channel name, and match are all Lua patterns, and if they only
-       have [a-zA-Z_] they don't have to be wrapped in parenthesis
-     - Channel names are prefaced by a #
-     - The name is taken literally, and can be a pattern, but the pattern will be treated
-       as a literal string for the purpose of comparing against other names
-     - Actions are sound and match
-     - sound must be wrapped in parenthesis if the file name has spaces
-     - Each command is either setting or getting
-     - Set commands need a server followed by a channel and then one or both actions, 
-    /SSOUND (server name) #(channel name) sound (sound file) match (Lua pattern)
-     - I don't yet know how we would deal with things like
-    /SSOUND #(channel name) (server name) match sound
-    /SSOUND match #sound sound sound wav
-     - I'm imagining the parser breaking things up into
-       {server name} {channel name} {sound file} {match}
-       and just passing those to a simpler function that does the things
-     - get commands can have one or both of server name and channel name
-
     Then, another function does the message matching by hooking to a server [and channel],
     and matches on message content, then issues the SPLAY command with file name to HexChat.
 
     I think the fancy parsing should be left to last.
+
+    Why should it be left to last?
+
+     - Lexer
+     - Parser
+     - Settings Printer
+     - Settings Setter
+     - Settings Getter
+     - Hook function
+     - - Receive Channel Message
+     - - Settings Getter on sever and channel
+     - - Recurse through matches, /SPLAY-ing every match's sound
 --]]
 
 hexchat.register(
   "SpecialSounds",
-  "0.0.1",
+  "0.0.2",
   "Set special sound to play on message"
 )
+
+local command_name = "SSOUND"
 
 local function set_sound (server_name, channel_name, sound_file, match)
   print("Hello")
 end
 
+local function print_error (message)
+  print(message)
+end
+
+local function lex (str)
+  if not str or #str < 1 then
+    print_error("Empty command invocation")
+    return false
+  end
+
+  local position = 1
+  --[=[
+  if str:sub(1,8):match("/[Ss][Ss][Oo][Uu][Nn][Dd] ") then
+    position = 9
+  else
+    str = "/SSOUND " .. str
+    position = 9
+  end
+  --]=]
+
+  local parenthesis_count = 0
+  local parenthesis_group = ""
+  local symbol = ""
+  local tokens = {}  
+
+
+  local function unbalanced_parenthesis_error (group)
+    local missing_paren = parenthesis_count > 0 and ")" or "("
+    missing_paren = missing_paren:rep(math.abs( parenthesis_count ))
+    print_error(([[
+Unbalanced parenthesis: missing %s
+
+This is the group:
+%s
+
+The full command is:
+/%s %s
+]]):format(missing_paren, parenthesis_group, command_name, str)
+    )
+  end
+
+  local function unexpected_character_error (char)
+    print_error(([[
+Found unexpected character:
+%s
+
+Here:
+/%s %s
+%s
+]]):format(char, command_name, str, (" "):rep(position -1 + #command_name + 2) .. "^")
+    )
+  end
+
+  local lex_parenthesis_group, inner_lex
+
+  function lex_parenthesis_group ()
+    if parenthesis_count == 0 then
+      tokens[#tokens + 1] = {name="parenthesis_group", value=parenthesis_group}
+      parenthesis_group = ""
+      return inner_lex()
+    end
+
+    if position > #str then
+      unbalanced_parenthesis_error(parenthesis_group)
+      return false
+    end
+
+    char = str:sub(position, position)
+    if char == "%" then
+      next_char = str:sub(position + 1, position + 1)
+      if next_char:match("[()]") then
+        position = position + 2
+        parenthesis_group = parenthesis_group .. char .. next_char
+        return lex_parenthesis_group()
+      else
+        position = position + 1
+        parenthesis_group = parenthesis_group .. char
+      end
+    elseif char == "(" then
+      parenthesis_count = parenthesis_count + 1
+      position = position + 1
+      parenthesis_group = parenthesis_group .. char
+      return lex_parenthesis_group()
+    elseif char == ")" then
+      parenthesis_count = parenthesis_count - 1
+      position = position + 1
+      parenthesis_group = parenthesis_group .. char
+      return lex_parenthesis_group()
+    else
+      position = position + 1
+      parenthesis_group = parenthesis_group .. char
+      return lex_parenthesis_group()
+    end
+  end
+
+
+  function inner_lex ()
+    if position > #str then
+      if #symbol > 0 then
+        tokens[#tokens + 1] = {name="symbol", value=symbol}
+        symbol = ""
+      end
+      return true
+    end
+
+    char = str:sub(position, position)
+    if char == "#" then
+      position = position + 1
+      tokens[#tokens + 1] = {name="hashmark", value=char}
+      return inner_lex()
+    elseif char:match("%s") then
+      position = position + 1
+      if #symbol > 0 then
+        tokens[#tokens + 1] = {name="symbol", value=symbol}
+        symbol = ""
+      end
+      return inner_lex()
+    elseif char == "(" then
+      if #symbol == 0 then
+        position = position + 1
+        parenthesis_count = parenthesis_count + 1
+        parenthesis_group = parenthesis_group .. char
+        return lex_parenthesis_group()
+      else
+        position = position + 1
+        symbol = symbol .. char
+        return inner_lex()
+      end
+    elseif char == ")" then
+      if #symbol == 0 then
+        unexpected_character_error(char)
+        return false
+      else
+        position = position + 1
+        symbol = symbol .. char
+        return inner_lex()
+      end
+    else
+      position = position + 1
+      symbol = symbol .. char
+      return inner_lex()
+    end
+  end
+
+  local exit_value = inner_lex()
+  if not exit_value then
+    return exit_value
+  end
+  
+  --[[
+  return function ()
+    for i=1, #tokens do
+      return tokens[i]
+    end
+  end
+  --]]
+  return tokens
+end
+
+function hook_command (words, word_eols)
+  tokens = lex(word_eols[2])
+  if not tokens then
+    print_error("Sorry, could not lex command")
+    return hexchat.EAT_HEXCHAT
+  end
+  
+  --[=[
+  for token in tokens do
+    print(([[
+Token name:
+%s
+Token:
+%s
+
+]]):format(token.name, token.value))
+  end
+  --]=]
+
+  for i=1, #tokens do
+    print(([[
+Token name:
+%s
+Token:
+%s
+
+]]):format(tokens[i].name, tokens[i].value)
+    )
+  end
+  
+  return hexchat.EAT_HEXCHAT
+end
+
 ---[===[
 -- Debugging
 local function print_hook_args (...)
+  for i=1, select('#', ...) do
+    print(select(i, ...))
+  end
   local arg = {...}
   for i,val in ipairs(arg) do
     print("arg "..tostring(i))
@@ -105,7 +238,8 @@ local function print_hook_args (...)
 end
 --]===]
 
-hexchat.hook_command("SSOUND", print_hook_args, [[
+-- Command for configuration  
+hexchat.hook_command(command_name, hook_command, [[
 DESCRIPTION
 
 Watch for message matching [match] in specific server and channel, and play sound with /SPLAY on match
@@ -129,4 +263,5 @@ Set the sound file to (D:\attention attention.wav) for any channel with "help" i
 Note, this will not play the sound, as no match has been specified yet:
 /SSOUND #(.*help.*) match (%?)
 Now it will match anything with a question mark in it.
+
 ]])
