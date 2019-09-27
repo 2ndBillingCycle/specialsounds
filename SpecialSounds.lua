@@ -26,6 +26,9 @@ hexchat.register(
 
 local command_name = "SSOUND"
 local settings_prefix = command_name .. "_"
+local hook_objects = {}
+local settings = {}
+
 
 local function set_sound (server_name, channel_name, sound_file, match)
   print("Hello")
@@ -290,16 +293,16 @@ local function unstrip_parenthesis_group (group_string)
 end
 
 local function print_settings (server, channel, sound, match)
-  if not server or server == "" then
+  if type(server) ~= "string" or server == "" then
     server = "()"
   end
-  if not channel or channel == "" then
+  if type(channel) ~= "string" or channel == "" then
     channel = "()"
   end
-  if not sound or sound == "" then
+  if type(sound) ~= "string" or sound == "" then
     sound = "()"
   end
-  if not match or match == "" then
+  if type(match) ~= "string" or match == "" then
     match = "()"
   end
 
@@ -310,10 +313,10 @@ Sound:   %s
 Match:   %s
 
 ]]):format(
-  server,
-  channel,
-  sound,
-  match
+  unstrip_parenthesis_group(server),
+  unstrip_parenthesis_group(channel),
+  unstrip_parenthesis_group(sound),
+  unstrip_parenthesis_group(match)
 )
 
   print_message(str)
@@ -321,37 +324,75 @@ end
 
 local function serialize_string (str)
   if type(str) ~= "string" then
-    print_error(("Cannot serialize: %s"):format(str))
+    print_error("Cannot serialize")
     return false
   elseif #str == 0 then
-    return str
+    return "[[]]"
   end
 
-  local serialized = str:gsub("([%[%]])", "%%%1")
-  return serialized
+  return "[[" .. str:gsub("([%[%]])", "%%%1") .. "]]"
 end
 
 local function deserialize_string (str)
-  if type(str) ~= "string" then
-    print_error(("Cannot deserialize: %s"):format(str))
+  -- Must be a string, and must have at least "[[]]"
+  if type(str) ~= "string" or #str < 4 or (not str:match("%[%[.-%]%]")) then
+    print_error("Cannot deserialize")
     return false
-  elseif #str == 0 then
-    return str
   end
 
-  return str:gsub("%%([%[%]])", "%1")
+  return str:sub(3,-3):gsub("%%([%[%]])", "%1")
 end
 
-local function retrieve_settings (server)
+
+local function retrieve_settings (server, channel)
   local server = server or ""
   local channel = channel or ""
 
-  local setting_name = settings_prefix .. server
+  local settings_key =
+    settings_prefix ..
+    serialize_string(server) ..
+    serialize_string(channel)
 
-  return hexchat.pluginprefs[setting_name] or ""
+  local settings_value = hexchat.pluginprefs[settings_key]
+  if not settings_value then
+    return "",""
+  end
+  if type(settings_value) ~= "string" then
+    print_error("Bad configuration information")
+    return false
+  end
+
+  local _, number_of_settings = settings_value:gsub("%[%[.-%]%]", "")
+  if number_of_settings > 2 then
+    print_error(([[
+Bad configuration information:
+%s
+]]):format(settings_value))
+  end
+
+  local matches = settings_value:gmatch("%[%[.-%]%]")
+  local sound = deserialize_string(matches())
+  local match = deserialize_string(matches())
+  return sound, match
 end
 
-local function load_settings (server)
+local function all_servers_and_channels_settings ()
+  local settings_pairs = pairs(hexchat.pluginprefs)
+
+  return function ()
+    while true do
+      local key, value = settings_pairs()
+      if not key then return key end
+      if key:match("SSOUND_%[%[.-%]%]%[%[.-%]%]") then
+        local matches = key:gmatch("%[%[.-%]%]")
+        local server = deserialize_string(matches())
+        local channel = deserialize_string(matches())
+        local sound, match = retrieve_settings(server, channel)
+        return server, channel, sound, match
+      end
+    end
+  end
+end
 
 local function store_settings (server, channel, sound, match)
   local server = server or ""
@@ -359,38 +400,36 @@ local function store_settings (server, channel, sound, match)
   local sound = sound or ""
   local match = match or ""
 
-  local setting_name = settings_prefix .. server
-  local setting_value = ([=[
-Channel{
-  name = [[%s]],
-  sound = [[%s]],
-  match = [[%s]]}
-]=]):format(
-  serialize_string(channel),
-  serialize_string(sound),
-  serialize_string(match))
+  local settings_key =
+    settings_prefix ..
+    serialize_string(server) ..
+    serialize_string(channel)
+  local settings_value =
+    serialize_string(sound) ..
+    "\n" ..
+    serialize_string(match)
 
-  local current_setting_value = retrieve_settings(server, channel)
+  local current_sound, current_match = retrieve_settings(server, channel)
+  if type(current_sound) == "string" and type(current_match) == "string" then
+    print_message("Overwriting old settings:")
+    print_settings(server, channel, current_sound, current_match)
+  end
 
-  hexchat.pluginprefs[setting_name] = current_setting_value .. setting_value
+  hexchat.pluginprefs[settings_key] = settings_value
 
   return true
 end
 
 
 local function set_settings (server, channel, sound, match)
-  local server = server or "()"
-  server = #server < 1 and "()" or unstrip_parenthesis_group(server)
-  local channel = channel or "()"
-  channel = #channel < 1 and "()" or unstrip_parenthesis_group(channel)
-  local sound = sound or "()"
-  sound = #sound < 1 and "()" or unstrip_parenthesis_group(sound)
-  local match = match or "()"
-  match = #match < 1 and "()" or unstrip_parenthesis_group(match)
+  local server = server or ""
+  local channel = channel or ""
+  local sound = sound or ""
+  local match = match or ""
 
   print_message(([[
 Set settings for: %s #%s
-]]):format(server, channel))
+]]):format(unstrip_parenthesis_group(server),unstrip_parenthesis_group(channel)))
 
   local exit_value = store_settings(server, channel, sound, match)
   if not exit_value then
@@ -404,48 +443,20 @@ Set settings for: %s #%s
 end
 
 local function get_settings (server, channel)
-  local server = server or "()"
-  server = #server < 1 and "()" or unstrip_parenthesis_group(server)
-  local channel = channel or "()"
-  channel = #channel < 1 and "()" or unstrip_parenthesis_group(channel)
+  local server = server or ""
+  local channel = channel or ""
 
   print_message(([[
 Get settings for: %s #%s
-]]):format(server, channel))
+]]):format(server, channel ~= "" and channel or "()"))
 
-  local setting_value = retrieve_settings(server, channel)
-  if not setting_value or setting_value == "" then
-    print_message("No settings found")
-    return true
+  local sound, match = retrieve_settings(server, channel)
+  if type(sound) ~= "string" or type(match) ~= "string" then
+    print_error("Malformed settings")
+    return false
   end
 
-  local server_settings = {}
-
-  -- NOTE: Not ideal having a global function
-  function Channel (tbl) -- Has to be global for loadstring to be able to see it
-    server_settings[#server_settings + 1] = tbl
-  end
-
-  local f, error_message
-  f, error_message = loadstring(setting_value)
-
-  if not f then
-    print_error(("Trouble reading configuration. Error was:\n%s"):format(error_message))
-    return f
-  end
-
-  f() -- Should populate server_settings
-
-  local sound, match
-  for i, channel_table in ipairs(server_settings) do
-    if channel_table.name == channel then
-      sound = channel_table.sound
-      match = channel_table.match
-      break
-    end
-  end
-
-  print_settings(server, channel, sound, match) -- If no channel is found, sound and match are passed as nil
+  print_settings(server, channel, sound, match)
   return true
 end
 
@@ -572,8 +583,10 @@ match: %s
         return false
       end
       -- Autofill empty server or channel name with a pattern to match everything
+      --[[ Better place to put this, and makes searching by leaving a field blank harder
       if #server < 1 then server = "(.*)" end
       if #channel < 1 then channel = "(.*)" end
+      --]]
       if #sound > 0 or #match > 0 then
         return set_settings(server, channel, sound, match)
       else
@@ -698,7 +711,7 @@ local function print_message (message) print(message) end
 --]===]
 
 
-function hook_command (words, word_eols)
+local function hook_command (words, word_eols)
   local exit_value = parse(word_eols[2])
   if not exit_value then
     print_error("Sorry, could not understand command")
@@ -707,10 +720,44 @@ function hook_command (words, word_eols)
   return hexchat.EAT_HEXCHAT
 end
 
+local function splay_on_matching_channel_message(server, channel)
+  return function (...)
+    local tbl = select(1, ...)
+    if type(tbl) ~= "table" then
+      print_error("Error in text event handler")
+      return hexchat.EAT_NONE
+    end
+    local message = hexchat.strip(tbl[2])
+    for sound, match in retrieve_settings(server, channel) do
+      local first_match = message:match(match)
+      print_message(("first match: %s"):format(tostring(first_match)))
+      if type(first_match) == "string" and first_match ~= "" and sound ~= "" then
+        sound = quote_escape(sound)
+        print_message(("playing sound file: %s"):format(sound))
+        hexchat.command(("splay \"%s\""):format(sound))
+        return hexchat.EAT_NONE
+      end
+    end
+  end
 
+local function setup ()
+  for server, channel, sound, match in all_servers_and_channels_settings() do
+    print_settings(server, channel, sound, match)
+  end
+
+  -- Unhook and delete all active hooks on reload
+  for i, val in ipairs(hook_objects) do
+    val:unhook()
+    hook_objects[i] = nil
+  end
+end
+
+setup()
 
 -- Set the function to be called when the command is invoked, and the help text
 hexchat.hook_command(command_name, hook_command, [[
+Pleays special sound on special message
+
 DESCRIPTION
 
 This command helps configure this plugin so that when a message is received that matches a pattern
@@ -727,9 +774,12 @@ If any of [server name], [channel name], [sound file], or [match] have spaces, t
 Note that the channel name will have the # on the outside of the parenthesis.
 If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to be escaped with the %.
 
+Lastly, if a [server name] needs to begin with a / then the whole name, including the / must be wrapped in parenthesis:
+(/ServerName)
+
 Example:
 
-/SSOUND (my server) #(a channel) sound (H:\this sound.wav) match (:%-%%) tehee %%(%-:)
+/SSOUND (/my server) #(a channel) sound (H:\this sound.wav) match (:%-%%) tehee %%(%-:)
 
 Note that in this example, the the full pattern as seen by Lua for the match is:
 :%-%) tehee %(%-:
