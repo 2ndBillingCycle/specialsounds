@@ -25,6 +25,7 @@ hexchat.register(
 )
 
 local command_name = "SSOUND"
+local settings_prefix = command_name .. "_"
 
 local function set_sound (server_name, channel_name, sound_file, match)
   print("Hello")
@@ -318,6 +319,65 @@ Match:   %s
   print_message(str)
 end
 
+local function serialize_string (str)
+  if type(str) ~= "string" then
+    print_error(("Cannot serialize: %s"):format(str))
+    return false
+  elseif #str == 0 then
+    return str
+  end
+
+  local serialized = str:gsub("([%[%]])", "%%%1")
+  return serialized
+end
+
+local function deserialize_string (str)
+  if type(str) ~= "string" then
+    print_error(("Cannot deserialize: %s"):format(str))
+    return false
+  elseif #str == 0 then
+    return str
+  end
+
+  return str:gsub("%%([%[%]])", "%1")
+end
+
+local function retrieve_settings (server)
+  local server = server or ""
+  local channel = channel or ""
+
+  local setting_name = settings_prefix .. server
+
+  return hexchat.pluginprefs[setting_name] or ""
+end
+
+local function load_settings (server)
+
+local function store_settings (server, channel, sound, match)
+  local server = server or ""
+  local channel = channel or ""
+  local sound = sound or ""
+  local match = match or ""
+
+  local setting_name = settings_prefix .. server
+  local setting_value = ([=[
+Channel{
+  name = [[%s]],
+  sound = [[%s]],
+  match = [[%s]]}
+]=]):format(
+  serialize_string(channel),
+  serialize_string(sound),
+  serialize_string(match))
+
+  local current_setting_value = retrieve_settings(server, channel)
+
+  hexchat.pluginprefs[setting_name] = current_setting_value .. setting_value
+
+  return true
+end
+
+
 local function set_settings (server, channel, sound, match)
   local server = server or "()"
   server = #server < 1 and "()" or unstrip_parenthesis_group(server)
@@ -332,7 +392,12 @@ local function set_settings (server, channel, sound, match)
 Set settings for: %s #%s
 ]]):format(server, channel))
 
-  -- NOTE: Set settings
+  local exit_value = store_settings(server, channel, sound, match)
+  if not exit_value then
+    print_error("Error storing settings")
+    print_settings(server, channel, sound, match)
+    return false
+  end
 
   print_settings(server, channel, sound, match)
   return true
@@ -348,9 +413,39 @@ local function get_settings (server, channel)
 Get settings for: %s #%s
 ]]):format(server, channel))
 
--- NOTE: Get settings
+  local setting_value = retrieve_settings(server, channel)
+  if not setting_value or setting_value == "" then
+    print_message("No settings found")
+    return true
+  end
 
-  print_settings(server, channel, sound, match)
+  local server_settings = {}
+
+  -- NOTE: Not ideal having a global function
+  function Channel (tbl) -- Has to be global for loadstring to be able to see it
+    server_settings[#server_settings + 1] = tbl
+  end
+
+  local f, error_message
+  f, error_message = loadstring(setting_value)
+
+  if not f then
+    print_error(("Trouble reading configuration. Error was:\n%s"):format(error_message))
+    return f
+  end
+
+  f() -- Should populate server_settings
+
+  local sound, match
+  for i, channel_table in ipairs(server_settings) do
+    if channel_table.name == channel then
+      sound = channel_table.sound
+      match = channel_table.match
+      break
+    end
+  end
+
+  print_settings(server, channel, sound, match) -- If no channel is found, sound and match are passed as nil
   return true
 end
 
@@ -475,7 +570,11 @@ match: %s
       if #server < 1 and #channel < 1 then
         parser_error("Found neither server nor channel name", position)
         return false
-      elseif #sound > 0 or #match > 0 then
+      end
+      -- Autofill empty server or channel name with a pattern to match everything
+      if #server < 1 then server = "(.*)" end
+      if #channel < 1 then channel = "(.*)" end
+      if #sound > 0 or #match > 0 then
         return set_settings(server, channel, sound, match)
       else
         return get_settings(server, channel)
@@ -614,24 +713,29 @@ end
 hexchat.hook_command(command_name, hook_command, [[
 DESCRIPTION
 
-This command helps configure this plugin so that when a message is received that matches [match] in specific
-server and channel, a sound is played using the HexChat /SPLAY command.
+This command helps configure this plugin so that when a message is received that matches a pattern
+in a specific server and/or channel, a sound is played using the HexChat /SPLAY command.
 
 The command syntax follows this format:
 /SSOUND [server name] #[channel name] sound [sound file] match [match]
 
+The [match] is interpreted as a Lua pattern: https://www.lua.org/pil/20.2.html
+
+Only one of [server name] and #[channel name] are required, but at least one must be given.
+
 If any of [server name], [channel name], [sound file], or [match] have spaces, they must be wrapped in parenthesis.
 Note that the channel name will have the # on the outside of the parenthesis.
-If there are parenthesis in any of them, the parenthesis need to be escaped with the %.
+If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to be escaped with the %.
 
 Example:
 
-/SSOUND (my server) #(a channel) sound (H:\this sound.wav) match (%(word%))
+/SSOUND (my server) #(a channel) sound (H:\this sound.wav) match (:%-%%) tehee %%(%-:)
 
-The [match] is interpreted as a Lua pattern: https://www.lua.org/pil/20.2.html
+Note that in this example, the the full pattern as seen by Lua for the match is:
+:%-%) tehee %(%-:
 
-Note that in the example, the match matches the literal text "word", with the full pattern as seen by Lua being:
-(word)
+This will match any message with the following in it:
+:-) tehee (-:
 
 EXAMPLES
 
@@ -641,7 +745,7 @@ Play sound from D:\friend.wav when your friend's name is mentioned:
 Show all sounds set for server freenode channel #irc:
 /SSOUND freenode #irc
 
-Set the sound file to (D:\attention attention.wav) for any channel with "help" in the name:
+Set the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on any server:
 /SSOUND #(.*help.*) sound (D:\attention attention.wav)
 Note, this will not play the sound, as no match has been specified yet:
 /SSOUND #(.*help.*) match (%?)
