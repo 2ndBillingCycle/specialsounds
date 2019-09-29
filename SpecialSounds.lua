@@ -2,37 +2,53 @@
      - Lexer               ✓
      - Parser              ✓
      - Settings Printer    ✓
-     - Settings Setter     -
-     - Settings Getter     -
-     - Hook function       ✗
+     - Settings Setter     ✓
+     - Settings Getter     ✓
+     - Hook function       -
      - - Receive Channel Message
      - - Settings Getter on sever and channel
      - - Recurse through matches, /SPLAY-ing every match's sound
 
 
-     Explanatory comments are much needed, in case I want to go through and fix bugs, after I've forgotten
-     how I wrote all of this.
+     It's ALIIIVE!
 
-     I'll also probably eventually want to make specifying channel AND server name optional, as currently,
-     only one needs to be specified, but the one elided is treated as a non-match (), and if both are missing,
-     the next piece of text is treated as the server name.
+     A lot of stuff isn't working in the way I'd like:
+      - Now that there can be multiple matches / server+channel, cannot delete a sound+match group
+      - neither server nor channel are treated as a pattern
+      - - Having to specify %. in server names is annoying
+      - - One way to avoid this is to autofill an empty server and/or channel with the current server and/or channel the command is typed into
+      - An action should be created to /stop ssound
+      - There's a lot of noise on startup
+      - - Reviewing where the noise is coming from and adding if blocks to not call noisy functions would be helpful, instead of relying on them performing input testing
+      - - Adding a /debug {on | off} action would probably be a good idea, and then searching for prints and surroundinf with an if debug block
+    
+    Current idea for dealing with multiple sound+match settings / server+channel:
+     - /ssound server #channel lists each sound+match block with a number that a /delete action could understand:
+           /ssound /delete [server] [#channel] 1
+           /ssound /deleteall [server] [#channel]
+           /ssound /search (.*) #(.*)
+           /ssound /deleteall (.*) #(.*)
+    
+    Also, default action should be changed to /get_or_set, that then calls a /get and /set action
+     - /set treats server and #channel as strings
+     - /get and /delete and such treat them as patterns
+    
+    Lastly, /echo should be changed to /lex, and a /parse function should be added to read back which action it detects, and what the action will do, like a dry run
 --]]
 
+---[[
 hexchat.register(
   "SpecialSounds",
-  "0.0.2",
+  "0.0.3",
   "Set special sound to play on message"
 )
+--]]
+local version = "0.0.3"
 
 local command_name = "SSOUND"
 local settings_prefix = command_name .. "_"
 local hook_objects = {}
 local settings = {}
-
-
-local function set_sound (server_name, channel_name, sound_file, match)
-  print("Hello")
-end
 
 -- Neither this lexer or parser are pretty. A very pretty one is at:
 -- https://github.com/stravant/LuaMinify/blob/master/ParseLua.lua
@@ -40,6 +56,31 @@ end
 -- In the future, these could be set to make a private message, or something
 local function print_error (message) print(message) end
 local function print_message (message) print(message) end
+
+---[[ Debug
+local function printvars (message, tbl)
+  print(message)
+  for key, var in pairs(tbl) do
+    print(tostring(key) .. ": " .. tostring(var))
+  end
+  return true
+end
+--]]
+--[[ Debug
+-- Mock hexchat
+local hexchat = {}
+hexchat.pluginprefs = {}
+hexchat.EAT_HEXCHAT = true
+hexchat.EAT_NONE = true
+hexchat.get_context = function ()
+  return {
+    get_info = function (ctx, str) return "a" end}
+  end
+hexchat.strip = function (str) return str end
+hexchat.command = function (str) print("hexchat.command:\n" .. str) end
+hexchat.hook_command = function (a, b, c) end
+hexchat.hook_print = function (str, func) return function () end end
+--]]
 
 local function lex (str)
   --[[
@@ -324,7 +365,7 @@ end
 
 local function serialize_string (str)
   if type(str) ~= "string" then
-    print_error("Cannot serialize")
+    print_error("Cannot serialize string")
     return false
   elseif #str == 0 then
     return "[[]]"
@@ -336,15 +377,53 @@ end
 local function deserialize_string (str)
   -- Must be a string, and must have at least "[[]]"
   if type(str) ~= "string" or #str < 4 or (not str:match("%[%[.-%]%]")) then
-    print_error("Cannot deserialize")
+    print_error("Cannot deserialize string")
     return false
   end
 
   return str:sub(3,-3):gsub("%%([%[%]])", "%1")
 end
 
+local function serialize_sound_match (tbl)
+  if type(tbl) ~= "table" or type(tbl[1]) ~= "table" then -- NOTE: Better to check everything for validity
+    print_error("Cannot serialize table")
+    return false
+  end
 
-local function retrieve_settings (server, channel)
+  local settings_string = ""
+  for i, sound_match in ipairs(tbl) do
+    settings_string = settings_string .. 
+      ([[
+
+sound = %s
+match = %s
+]]):format(
+  serialize_string(sound_match.sound),
+  serialize_string(sound_match.match)
+)
+  end
+
+  return settings_string
+end
+
+local function deserialize_sound_match (sound_match_string)
+  local sound_match_pattern = "sound = (%[%[.-%]%])\nmatch = (%[%[.-%]%])"
+  if type(sound_match_string) ~= "string" or not sound_match_string:match(sound_match_pattern) then
+    print_error("Cannot deserialize table")
+    return function () return nil end
+  end
+
+  local matches = sound_match_string:gmatch(sound_match_pattern)
+  return function()
+    local sound, match = matches()
+    if type(sound) ~= "string" or type(match) ~= "string" then
+      return sound, match
+    end
+    return deserialize_string(sound), deserialize_string(match)
+  end
+end
+
+local function retrieve_settings_value (server, channel)
   local server = server or ""
   local channel = channel or ""
 
@@ -353,44 +432,84 @@ local function retrieve_settings (server, channel)
     serialize_string(server) ..
     serialize_string(channel)
 
-  local settings_value = hexchat.pluginprefs[settings_key]
+  if settings[settings_key] then
+    return settings[settings_key]
+  else
+    settings[settings_key] = hexchat.pluginprefs[settings_key]
+    return hexchat.pluginprefs[settings_key]
+  end
+end
+
+local function retrieve_settings (server, channel)
+  local server = server or ""
+  local channel = channel or ""
+
+  local settings_value = retrieve_settings_value(server, channel)
   if not settings_value then
-    return "",""
+    return function() return nil end
   end
   if type(settings_value) ~= "string" then
     print_error("Bad configuration information")
-    return false
+    return function() return false end
   end
 
-  local _, number_of_settings = settings_value:gsub("%[%[.-%]%]", "")
-  if number_of_settings > 2 then
-    print_error(([[
-Bad configuration information:
-%s
-]]):format(settings_value))
+  local sound_match = deserialize_sound_match(settings_value)
+  local count = 0
+  return function()
+    local sound, match = sound_match()
+    if not sound and not match and count == 0 then
+      count = count + 1
+      return "",""
+    elseif type(sound) ~= "string" or type(match) ~= "string" then
+      return nil -- Indicate iterator end
+    end
+    count = count + 1
+    return sound, match
   end
-
-  local matches = settings_value:gmatch("%[%[.-%]%]")
-  local sound = deserialize_string(matches())
-  local match = deserialize_string(matches())
-  return sound, match
 end
 
 local function all_servers_and_channels_settings ()
-  local settings_pairs = pairs(hexchat.pluginprefs)
-
-  return function ()
+  local settings_keys = {}
+  local settings_values = {}
+  for key, val in pairs(hexchat.pluginprefs) do
+    settings_keys[#settings_keys + 1] = key
+    settings_values[#settings_values + 1] = deserialize_sound_match(val)
+  end
+  local key_index = 1
+  local continue = false
+  
+  return function()
     while true do
-      local key, value = settings_pairs()
-      if not key then return key end
-      if key:match("SSOUND_%[%[.-%]%]%[%[.-%]%]") then
-        local matches = key:gmatch("%[%[.-%]%]")
-        local server = deserialize_string(matches())
-        local channel = deserialize_string(matches())
-        local sound, match = retrieve_settings(server, channel)
+      if key_index > #settings_keys then
+        return nil
+      end
+      local server, channel = settings_keys[key_index]:match(
+        settings_prefix .. "(%[%[.-%]%])(%[%[.-%]%])")
+      if continue or type(server) ~= "string" or type(channel) ~= "string" then
+        continue = true -- Skip this key, since it's malformed, but there are still more keys
+      else
+        server = deserialize_string(server)
+        channel = deserialize_string(channel)
+      end
+      local sound, match
+      if continue or type(settings_values[key_index]) ~= "function" then
+        print_error(([[
+Bad settings for
+server: %s
+channel: %s
+]]):format(tostring(server), tostring(channel)))
+        continue = true
+      else
+        sound, match = settings_values[key_index]() -- We stored an iterator, so execute it
+      end
+      if continue or type(sound) ~= "string" then
+        continue = true
+      else
         return server, channel, sound, match
       end
-    end
+      key_index = key_index + 1
+      continue = false
+    end 
   end
 end
 
@@ -404,22 +523,44 @@ local function store_settings (server, channel, sound, match)
     settings_prefix ..
     serialize_string(server) ..
     serialize_string(channel)
-  local settings_value =
-    serialize_string(sound) ..
-    "\n" ..
-    serialize_string(match)
+  
+  local current_settings_value = retrieve_settings_value(server, channel)
+  current_settings_value = type(current_settings_value) == "string" and current_settings_value or ""
 
-  local current_sound, current_match = retrieve_settings(server, channel)
-  if type(current_sound) == "string" and type(current_match) == "string" then
-    print_message("Overwriting old settings:")
-    print_settings(server, channel, current_sound, current_match)
+  local current_tables = {}
+  local matched = false
+  for curr_sound, curr_match in deserialize_sound_match(current_settings_value) do
+    if curr_match == match then
+      current_tables[#current_tables + 1] = {sound=sound, match=match}
+      print_message(([[
+Overwriting settings:
+Server: %s
+Channel: #%s
+Sound: %s
+Match: %s
+]]):format(
+  unstrip_parenthesis_group(server),
+  unstrip_parenthesis_group(channel),
+  unstrip_parenthesis_group(sound),
+  unstrip_parenthesis_group(match)))
+      matched = true
+    else
+      current_tables[#current_tables + 1] = {sound=curr_sound, match=curr_match}
+    end
+  end
+  
+  if not matched and type(sound) == "string" and type(match) == "string" then
+    current_tables[#current_tables + 1] = {sound=sound, match=match}
+  end
+  local settings_value = serialize_sound_match(current_tables)
+  if not settings_value then
+    return false
   end
 
   hexchat.pluginprefs[settings_key] = settings_value
 
   return true
 end
-
 
 local function set_settings (server, channel, sound, match)
   local server = server or ""
@@ -450,13 +591,14 @@ local function get_settings (server, channel)
 Get settings for: %s #%s
 ]]):format(server, channel ~= "" and channel or "()"))
 
-  local sound, match = retrieve_settings(server, channel)
-  if type(sound) ~= "string" or type(match) ~= "string" then
-    print_error("Malformed settings")
-    return false
-  end
+  for sound, match in retrieve_settings(server, channel) do
+    if type(sound) ~= "string" or type(match) ~= "string" then
+      print_error("Malformed settings")
+      return false
+    end
 
-  print_settings(server, channel, sound, match)
+    print_settings(server, channel, sound, match)
+  end
   return true
 end
 
@@ -471,6 +613,7 @@ Token value:
 %s
 ]]):format(tokens[i].name, tokens[i].value))
   end
+  return true
 end
 --]===]
 
@@ -545,7 +688,7 @@ Parser error: %s
     else
       sound = token.value
     end
-    if not is_valid_sound(token.value) then
+    if not is_valid_sound(sound) then
       parser_error(("Invalid sound file: %s"):format(token.value), position)
       return false
     end
@@ -711,7 +854,7 @@ local function print_message (message) print(message) end
 --]===]
 
 
-local function hook_command (words, word_eols)
+function hook_command (words, word_eols)
   local exit_value = parse(word_eols[2])
   if not exit_value then
     print_error("Sorry, could not understand command")
@@ -720,27 +863,49 @@ local function hook_command (words, word_eols)
   return hexchat.EAT_HEXCHAT
 end
 
-local function splay_on_matching_channel_message(server, channel)
-  return function (...)
-    local tbl = select(1, ...)
+local function quote_escape (str)
+  if type(str) ~= "string" then
+    print_error("Cannot quote escape string")
+    return str
+  end
+
+  if str:match('"') or str:match("%s") then
+    str = '"' .. str:gsub('"', '\\"') .. '"'
+  end
+  return str
+end
+
+local function splay_on_matching_channel_message()
+  return function (tbl)
     if type(tbl) ~= "table" then
       print_error("Error in text event handler")
       return hexchat.EAT_NONE
     end
+
+    local ctx = hexchat.get_context()
+    server = ctx:get_info("server")
+    channel = ctx:get_info("channel")
+    if channel:sub(1,1) == "#" then
+      channel = channel:sub(2,-1)
+    end
+
     local message = hexchat.strip(tbl[2])
     for sound, match in retrieve_settings(server, channel) do
-      local first_match = message:match(match)
-      print_message(("first match: %s"):format(tostring(first_match)))
-      if type(first_match) == "string" and first_match ~= "" and sound ~= "" then
+      local first_group = message:match(match)
+      if type(first_group) == "string" and first_group ~= "" and sound ~= "" then
         sound = quote_escape(sound)
-        print_message(("playing sound file: %s"):format(sound))
-        hexchat.command(("splay \"%s\""):format(sound))
+        print_message("playing sound file: " .. tostring(sound))
+        hexchat.command("splay " .. sound)
         return hexchat.EAT_NONE
       end
     end
   end
+end
 
 local function setup ()
+  if not hexchat.pluginprefs.version then
+    hexchat.pluginprefs.version = version
+  end
   for server, channel, sound, match in all_servers_and_channels_settings() do
     print_settings(server, channel, sound, match)
   end
@@ -750,6 +915,8 @@ local function setup ()
     val:unhook()
     hook_objects[i] = nil
   end
+
+  hook_objects[#hook_objects + 1] = hexchat.hook_print("Channel Message", splay_on_matching_channel_message())
 end
 
 setup()
