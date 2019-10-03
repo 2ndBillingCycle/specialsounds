@@ -1,13 +1,36 @@
 --[[
-     - Lexer               ✓
-     - Parser              ✓
-     - Settings Printer    ✓
-     - Settings Setter     ✓
-     - Settings Getter     ✓
-     - Hook function       -
+     - Lexer                                                                        ✓
+     - Parser                                                                       ✓
+     - Settings Printer                                                             ✓
+     - Settings Setter                                                              -
+     - Settings Getter                                                              -
+     - Hook function                                                                -
      - - Receive Channel Message
      - - Settings Getter on sever and channel
      - - Recurse through matches, /SPLAY-ing every match's sound
+     - /show_or_add                                                                 ✗
+     - - Autofills with current context
+     - - /show                                                                      ✗
+     - - - /showall                                                                 ✗
+     - - /add                                                                       ✗
+     - /delete                                                                      ✗
+     - /deleteall                                                                   ✗
+     - /lex                                                                         ✗
+     - - Prints tokens
+     - /parse                                                                       ✗
+     - - Dry run with /debug on
+     - /debug                                                                       ✗
+     - /echo                                                                        ✗
+     - on/off: echos command
+     - Tab completion                                                               ✗
+     - - watching for the Tab key, to autofill actions, server names, channels, etc
+     - Sound file validation                                                        ✗
+     - - File exists
+     - - /SPLAY it so HexChat errors on bad files
+     - /link                                                                        ✗
+     - - Detect if not installed in plugins folder
+     - - Suggest to /ssound /link to link from where it is into the plugins folder   
+
 
 
      It's ALIIIVE!
@@ -39,19 +62,38 @@
 ---[[
 hexchat.register(
   "SpecialSounds",
-  "0.0.3",
+  "4",
   "Set special sound to play on message"
 )
 --]]
-local version = "0.0.3"
+local version = "4"
 
 local command_name = "SSOUND"
 local settings_prefix = command_name .. "_"
 local hook_objects = {}
 local settings = {}
+local quotepattern = '(['..("%().[]*+-?"):gsub("(.)", "%%%1")..'])'
+string.escape_pattern = function(str)
+  str = (str:gsub(quotepattern, "%%%1")
+            :gsub("^^", "%%^")
+            :gsub("$$", "%%%$"))
+  return str
+end
+string.escape_quotes = function (str)
+  if type(str) ~= "string" then
+    print_error("Cannot quote escape string")
+    return str
+  end
 
--- Neither this lexer or parser are pretty. A very pretty one is at:
+  if str:match('"') or str:match("%s") then
+    str = '"' .. str:gsub('"', '\\"') .. '"'
+  end
+  return str
+end
+
+-- Neither this lexer nor parser are pretty. A very pretty one is at:
 -- https://github.com/stravant/LuaMinify/blob/master/ParseLua.lua
+
 -- Currently, no fancy printing is done
 -- In the future, these could be set to make a private message, or something
 local function print_error (message) print(message) end
@@ -72,6 +114,7 @@ local hexchat = {}
 hexchat.pluginprefs = {}
 hexchat.EAT_HEXCHAT = true
 hexchat.EAT_NONE = true
+hexchat.get_info = function (str) return "a" end
 hexchat.get_context = function ()
   return {
     get_info = function (ctx, str) return "a" end}
@@ -147,7 +190,7 @@ local function lex (str)
       {name=token_name, value=token_value},
       ...
     }
-  ]]
+  --]]
 
   ---[[ Special errors for specific cases
   local function unbalanced_parenthesis_error (group)
@@ -264,6 +307,11 @@ Here:
         symbol = ""
       end
       return inner_lex()
+    elseif symbol_name == "number" and not char:match("%d") then
+      position = position + 1
+      symbol = symbol .. char
+      symbol_name = "text"
+      return lex_symbol(symbol_name)
     else
       -- Everything else is a valid symbol character, including ( and )
       position = position + 1
@@ -293,6 +341,8 @@ Here:
       return false
     elseif char == "/" then
       return lex_symbol("action")
+    elseif char:match("%d") then
+      return lex_symbol("number")
     else
       -- Jump to the lex_symbol branch without changing state
       return lex_symbol()
@@ -384,6 +434,15 @@ local function deserialize_string (str)
   return str:sub(3,-3):gsub("%%([%[%]])", "%1")
 end
 
+local function make_settings_key (server, channel)
+  if type(server) ~= "string" or type(channel) ~= "string" then
+    print_error("Cannot make settings key")
+    return false
+  end
+
+  return settings_prefix .. serialize_string(server) .. serialize_string(channel)
+end
+
 local function serialize_sound_match (tbl)
   if type(tbl) ~= "table" or type(tbl[1]) ~= "table" then -- NOTE: Better to check everything for validity
     print_error("Cannot serialize table")
@@ -427,10 +486,8 @@ local function retrieve_settings_value (server, channel)
   local server = server or ""
   local channel = channel or ""
 
-  local settings_key =
-    settings_prefix ..
-    serialize_string(server) ..
-    serialize_string(channel)
+  local settings_key = make_settings_key(server, channel)
+  if not settings_key then return settings_key end
 
   if settings[settings_key] then
     return settings[settings_key]
@@ -472,8 +529,10 @@ local function all_servers_and_channels_settings ()
   local settings_keys = {}
   local settings_values = {}
   for key, val in pairs(hexchat.pluginprefs) do
-    settings_keys[#settings_keys + 1] = key
-    settings_values[#settings_values + 1] = deserialize_sound_match(val)
+    if key:match(settings_prefix .. "%[%[.-%]%]%[%[.-%]%]") and val:match("sound = %[%[.-%]%]\nmatch = %[%[.-%]%]") then
+      settings_keys[#settings_keys + 1] = key
+      settings_values[#settings_values + 1] = deserialize_sound_match(val)
+    end
   end
   local key_index = 1
   local continue = false
@@ -492,15 +551,19 @@ local function all_servers_and_channels_settings ()
         channel = deserialize_string(channel)
       end
       local sound, match
-      if continue or type(settings_values[key_index]) ~= "function" then
-        print_error(([[
+      if not continue and server and channel and type(settings_values[key_index]) == "function" then
+        sound, match = settings_values[key_index]() -- We stored an iterator, so execute it
+      elseif not continue then
+        if debug then
+          print_error(([[
 Bad settings for
 server: %s
 channel: %s
 ]]):format(tostring(server), tostring(channel)))
+        end
         continue = true
       else
-        sound, match = settings_values[key_index]() -- We stored an iterator, so execute it
+        continue = true
       end
       if continue or type(sound) ~= "string" then
         continue = true
@@ -519,37 +582,36 @@ local function store_settings (server, channel, sound, match)
   local sound = sound or ""
   local match = match or ""
 
-  local settings_key =
-    settings_prefix ..
-    serialize_string(server) ..
-    serialize_string(channel)
+  local settings_key = make_settings_key(server, channel)
+  if not settings_key then return settings_key end
   
   local current_settings_value = retrieve_settings_value(server, channel)
-  current_settings_value = type(current_settings_value) == "string" and current_settings_value or ""
 
   local current_tables = {}
   local matched = false
-  for curr_sound, curr_match in deserialize_sound_match(current_settings_value) do
-    if curr_match == match then
-      current_tables[#current_tables + 1] = {sound=sound, match=match}
-      print_message(([[
+  if type(current_settings_value) == "string" then
+    for curr_sound, curr_match in deserialize_sound_match(current_settings_value) do
+      if curr_match == match then
+        current_tables[#current_tables + 1] = {sound=sound, match=match}
+        print_message(([[
 Overwriting settings:
 Server: %s
 Channel: #%s
 Sound: %s
 Match: %s
 ]]):format(
-  unstrip_parenthesis_group(server),
-  unstrip_parenthesis_group(channel),
-  unstrip_parenthesis_group(sound),
-  unstrip_parenthesis_group(match)))
-      matched = true
-    else
-      current_tables[#current_tables + 1] = {sound=curr_sound, match=curr_match}
+    unstrip_parenthesis_group(server),
+    unstrip_parenthesis_group(channel),
+    unstrip_parenthesis_group(sound),
+    unstrip_parenthesis_group(match)))
+        matched = true
+      else
+        current_tables[#current_tables + 1] = {sound=curr_sound, match=curr_match}
+      end
     end
   end
   
-  if not matched and type(sound) == "string" and type(match) == "string" then
+  if not matched then -- Because of the local sound = sound or "", sound and match will always be strings
     current_tables[#current_tables + 1] = {sound=sound, match=match}
   end
   local settings_value = serialize_sound_match(current_tables)
@@ -557,6 +619,7 @@ Match: %s
     return false
   end
 
+  settings[settings_key] = settings_value
   hexchat.pluginprefs[settings_key] = settings_value
 
   return true
@@ -602,11 +665,41 @@ Get settings for: %s #%s
   return true
 end
 
+local function delete_setting (server, channel, number)
+  if type(server) ~= "string" or type(channel) ~= "string" or type(number) ~= "number" then
+    print_error("Cannot understand delete command")
+    return false
+  end
 
----[===[ Debug
+  local new_sound_match_pairs = {}
+  for sound, match in retrieve_settings(server, channel) do
+    if #new_sound_match_pairs + 1 == number then
+      -- Don't add itt ot he updated table, thereby removing it
+    else
+      new_sound_match_pairs[#new_sound_match_pairs + 1] = {sound=sound, match=match}
+    end
+  end
+
+  if #new_sound_match_pairs < 1 then
+    new_sound_match_pairs[1] = {sound="", match=""}
+  end
+
+  local new_settings_value = serialize_sound_match(new_sound_match_pairs)
+  if not new_settings_value then return new_settings_value end
+
+  local settings_key = make_settings_key(server, channel)
+  if not settings_key then return settings_key end
+
+  settings[settings_key] = settings_value
+  hexchat.pluginprefs[settings_key] = settings_value
+end
+
 local function print_tokens (tokens)
+  if type(tokens) ~= "table" then
+    return false
+  end
   for i=1, #tokens do
-          print(([[
+    print_message(([[
 Token name:
 %s
 Token value:
@@ -615,8 +708,6 @@ Token value:
   end
   return true
 end
---]===]
-
 
 -- Currently no validity checking, but these could be used to check if a sound file exists, or if Lua can parse a pattern
 local function is_valid_server  (server)  return true end
@@ -636,8 +727,25 @@ local function parse (str)
   local channel = ""
   local sound = ""
   local match = ""
+  local number = false
   local action = ""
   local action_table = {}
+  local function is_symbol (str)
+    local symbol_types = {"text", "parenthesis_group", "number"}
+    for i=1, #symbol_types do
+      if str == symbol_types[i] then return true end
+    end
+    return false
+  end
+  string.is_symbol = is_symbol
+  local function is_set_parameter (str)
+    local set_parameters = {"sound", "match"}
+    for i=1, #set_parameters do
+      if str == set_parameters[i] then return true end
+    end
+    return false
+  end
+  string.is_set_parameter = is_set_parameter
 
   local function parser_error (message, index)
     local command_string = ("/%s "):format(command_name)
@@ -669,17 +777,63 @@ Parser error: %s
     print_error(error_message)
   end
 
-  local getter_setter_action, parse_sound, parse_match, echo_action, inner_parse
+  local show_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel, lex_action, inner_parse
 
-  function echo_action ()
-    local echo_text = ""
+  function lex_action ()
+    local reconstructed_command = ""
     for i=position, #tokens do
-      echo_text = echo_text .. tokens[i].value .. " "
+      reconstructed_command = reconstructed_command .. tokens[i].value .. " "
     end
-    echo_text = echo_text:sub(1,-2) -- drop the last character, which is a space
-    print_message(echo_text)
+    reconstructed_command = reconstructed_command:sub(1,-2) -- drop the last character, which is a space
+    print_message(([[
+Command:
+%s
+Tokens:
+]]):format(tostring(reconstructed_command)))
+    print_tokens(tokens)
     return true
   end
+
+  function delete_action (server, channel, number)
+    if position > #tokens then
+      if #server > 0 and #channel > 0 and number ~= false then
+        return delete_setting(server, channel, number)
+      else
+        parser_error("Cannot determine item to delete", #tokens)
+        return false
+      end
+    end
+
+    local token = tokens[position]
+    ---[[ Currently, we can only get here in 2 cases:
+    -- 1) Called with arguments, after show_or_add_or_delete has determined the correct action
+    -- 2) The /delete action was specified
+    if position == #tokens and token.name == "number" then
+      if token.value:match("^%d+$") and tonumber(token.value) then
+        number = tonumber(token.value)
+        server = hexchat.get_info("server")
+        channel = hexchat.get_info("channel")
+        if type(server) == "string" and type(channel) == "string" then
+          channel = channel:sub(2)
+          position = position + 1
+          return delete_action(server, channel, number)
+        else
+          print_error(([[
+Something wrong with server or channel name:
+Server: %s
+Channel: %s
+]]):format( tostring(server) , tostring(channel) ))
+          return false
+        end
+      else
+        parser_error("Cannot determine number", position)
+        return false
+      end
+    else
+      return show_or_add_or_delete()
+    end
+  end
+
 
   function parse_sound ()
     local token = tokens[position]
@@ -693,7 +847,7 @@ Parser error: %s
       return false
     end
     position = position + 1
-    return getter_setter_action()
+    return show_or_add_or_delete()
   end
 
   function parse_match ()
@@ -708,42 +862,18 @@ Parser error: %s
       return false
     end
     position = position + 1
-    return getter_setter_action()
+    return show_or_add_or_delete()
   end
 
-  function getter_setter_action ()
-    if position > #tokens then
-      --[===[ Debug
-      print(([[
-server: %s
-channel: %s
-sound: %s
-match: %s
-]]):format(server,channel,sound,match))
-      --]===]
-      if #server < 1 and #channel < 1 then
-        parser_error("Found neither server nor channel name", position)
-        return false
-      end
-      -- Autofill empty server or channel name with a pattern to match everything
-      --[[ Better place to put this, and makes searching by leaving a field blank harder
-      if #server < 1 then server = "(.*)" end
-      if #channel < 1 then channel = "(.*)" end
-      --]]
-      if #sound > 0 or #match > 0 then
-        return set_settings(server, channel, sound, match)
-      else
-        return get_settings(server, channel)
-      end
+  function parse_server_channel ()
+    if position > #tokens or #server > 0 or #channel > 0 then
+      return true
     end
 
     local token = tokens[position]
-    --[===[ Debug
-    print(("Token name: %s\nToken value: %s"):format(token.name, token.value))
-    --]===]
     if token.name == "hashmark" then
-      next_token = tokens[position + 1]
-      if not next_token then
+      local next_token = tokens[position + 1]
+      if type(next_token) ~= "table" or not next_token.name:is_symbol() then
         parser_error("Expected channel name", position)
         return false
       end
@@ -759,9 +889,9 @@ match: %s
         return false
       end
       position = position + 2
-      return getter_setter_action()
+      return parse_server_channel()
 
-    elseif (token.name == "text" or token.name == "parenthesis_group") and #server < 1 and #channel < 1 then
+    elseif token.name:is_symbol() and #server < 1 and #channel < 1 then
       if token.name == "parenthesis_group" then
         server = strip_parenthesis_group(token.value)
       else
@@ -774,15 +904,103 @@ match: %s
         return false
       end
       position = position + 1
-      return getter_setter_action()
+      return parse_server_channel() 
+    end
+  end
 
-    elseif (token.name == "text" or token.name == "parenthesis_group") and token.value == "sound" then
+  local function autofill_server_channel ()
+    if #server < 0 then
+      server = hexchat.get_info("server")
+      if type(server) ~= "string" then
+        print_error("Cannot get name of current server\nMay have to specify server and channel name")
+        return false
+      end
+    end
+    if #channel < 0 then
+      channel = hexchat.get_info("channel")
+      if type(channel) ~= "string" then
+        print_error("Cannot get name of current channel\nMay have to specify server and channel name")
+        return false
+      end
+      channel = channel:sub(2) -- Drop # from channel name
+    end
+    return true
+  end
+
+  --[[
+  function show_or_add_or_delete ()
+    if position > #tokens then
+      if #server > 0 and #channel > 0 and #sound < 1 and #match < 1 and number ~= false then
+        return delete_action(server, channel, number)
+      elseif #sound > 0 or #match > 0 then
+        local exit_value = autofill_server_channel()
+        if not exit_value then return exit_value end
+        return set_settings(server, channel, sound, match)
+      elseif #server > 0 or #channel > 0 then
+        local exit_value = autofill_server_channel()
+        if not exit_value then return exit_value end
+        return get_settings(server, channel)
+      else
+        parser_error("Cannot guess action\nTry adding a server name, channel name, sound file, or match pattern", position)
+        return false
+      end
+    end
+
+    local token = tokens[position]
+    --[===[ Debug
+    print(("Token name: %s\nToken value: %s"):format(token.name, token.value))
+    --]===]
+    if token.name == "hashmark" then
+      local next_token = tokens[position + 1]
+      if type(next_token) ~= "table" or not next_token.name:is_symbol() then
+        parser_error("Expected channel name", position)
+        return false
+      end
+      if next_token.name == "parenthesis_group" then
+        channel = strip_parenthesis_group(next_token.value)
+      else
+        channel = next_token.value
+      end
+      if not is_valid_channel(channel) then
+        local error_message = "Not a valid channel: %s"
+        error_message = error_message:format(channel)
+        parser_error(error_message, position)
+        return false
+      end
+      position = position + 2
+      return show_or_add_or_delete()
+
+    elseif token.name:is_symbol() and not token.value:is_set_parameter() and #server < 1 and #channel < 1 then
+      if token.name == "parenthesis_group" then
+        server = strip_parenthesis_group(token.value)
+      else
+        server = token.value
+      end
+      if not is_valid_server(server) then
+        local error_message = "Not a valid server: %s"
+        error_message = error_message:format(server)
+        parser_error(error_message, position)
+        return false
+      end
+      print("set server")
+      position = position + 1
+      return show_or_add_or_delete()
+
+    elseif token.name:is_symbol() and token.value == "sound" then
       position = position + 1
       return parse_sound()
 
-    elseif (token.name == "text" or token.name == "parenthesis_group") and token.value == "match" then
+    elseif token.name:is_symbol() and token.value == "match" then
       position = position + 1
       return parse_match()
+
+    elseif token.name == "number" then
+      if token.value:match("^%d+$") and tonumber(token.value) then
+        number = tonumber(token.value)
+        return show_or_add_or_delete()
+      end
+      parser_error("This looks like a number, but I can't parse it as a number", position)
+      return false
 
     else
       local error_message = "Unexpected %s"
@@ -797,9 +1015,11 @@ match: %s
     end
 
   end
+  --]]
 
-  action_table["echo"] = echo_action
-  action_table["getter_setter"] = getter_setter_action 
+  action_table["lex"] = lex_action
+  action_table["delete"] = delete_action
+  action_table["show_or_add_or_delete"] = show_or_add_or_delete 
 
   function inner_parse ()
     if position > #tokens then
@@ -812,24 +1032,22 @@ match: %s
 
     local token = tokens[position]
     if token.name == "action" then
-      position = position + 1
       action = token.value:sub(2) -- Strip prefix /
       if not action_table[action] then
         parser_error("Not a valid action", position)
         return false
       end
+      position = position + 1
       return action_table[action]()
-    -- The default action is getter_setter, so if none is specified, use that
-    elseif token.name == "text" or token.name == "parenthesis_group" or token.name == "hashmark" then
+    -- The default action is show_or_add_or_delete, so if none is specified, use that
+    elseif token.name:is_symbol() or token.name == "hashmark" then
       -- position = position + 1 -- Don't skip over this token, because it's part of the action's parameter's
-      action = "getter_setter"
+      action = "show_or_add_or_delete"
       return action_table[action]()
     else
       parser_error("Could not determine action", position)
     end
   end
-
-  
 
   return inner_parse()
 
@@ -863,16 +1081,51 @@ function hook_command (words, word_eols)
   return hexchat.EAT_HEXCHAT
 end
 
-local function quote_escape (str)
-  if type(str) ~= "string" then
-    print_error("Cannot quote escape string")
-    return str
+local function search_settings (server, channel)
+  if type(server) ~= "string" or type(channel) ~= "string" then
+    return function () return nil end
   end
 
-  if str:match('"') or str:match("%s") then
-    str = '"' .. str:gsub('"', '\\"') .. '"'
+  local valid = {}
+  for key, val in pairs(settings) do
+    if key:match(settings_prefix .. "%[%[.-%]%]%[%[.-%]%]") and
+       val:match("sound = %[%[.-%]%]\nmatch = %[%[.-%]%]") then
+      valid[#valid + 1] = {key=key,val=val}
+    end
   end
-  return str
+
+  local keys_processed = {}
+  for i, tbl in ipairs(valid) do
+    local _server, _channel = tbl.key:match("(%[%[.-%]%])(%[%[.-%]%])")
+    keys_processed[#keys_processed + 1] = {
+      server = deserialize_string(_server),
+      channel = deserialize_string(_channel),
+      sound_match = deserialize_sound_match(tbl.val)
+    }
+  end
+
+  if #keys_processed < 1 then
+    return function () return nil end
+  end
+
+  local key_index = 1
+  return function ()
+    while true do
+      if key_index > #keys_processed then
+        return nil, nil
+      end
+      local _server = keys_processed[key_index].server
+      local _channel = keys_processed[key_index].channel
+      if server:match(_server) and channel:match(_channel) then
+        local sound, match = keys_processed[key_index].sound_match()
+        if type(sound) == "string" and type(match) == "string" then
+          key_index = key_index + 1
+          return _server, _channel, sound, match
+        end
+      end
+      key_index = key_index + 1
+    end
+  end
 end
 
 local function splay_on_matching_channel_message()
@@ -890,11 +1143,13 @@ local function splay_on_matching_channel_message()
     end
 
     local message = hexchat.strip(tbl[2])
-    for sound, match in retrieve_settings(server, channel) do
+    for server, channel, sound, match in search_settings(server, channel) do
       local first_group = message:match(match)
       if type(first_group) == "string" and first_group ~= "" and sound ~= "" then
-        sound = quote_escape(sound)
-        print_message("playing sound file: " .. tostring(sound))
+        sound = sound:escape_quotes()
+        if debug then
+          print_message("playing sound file: " .. tostring(sound))
+        end
         hexchat.command("splay " .. sound)
         return hexchat.EAT_NONE
       end
@@ -905,9 +1160,21 @@ end
 local function setup ()
   if not hexchat.pluginprefs.version then
     hexchat.pluginprefs.version = version
+  elseif tonumber(hexchat.pluginprefs.version) > tonumber(version) then
+    print_message("The stored settings may be in a newer format than this version of the plugin:")
+    print_message("Plugin version:   " .. tostring(version))
+    print_message("Settings version: " .. tostring(hexchat.pluginprefs.version))
+  else
+    -- No releases yet, so no need to support data migration
+  end
+  for key, val in pairs(hexchat.pluginprefs) do
+    settings[key] = val
   end
   for server, channel, sound, match in all_servers_and_channels_settings() do
-    print_settings(server, channel, sound, match)
+    -- Calling this function forces the retrieval of all currently valid settings, and puts those in cache
+    if debug then
+      print_settings(server, channel, sound, match)
+    end
   end
 
   -- Unhook and delete all active hooks on reload
@@ -933,39 +1200,45 @@ in a specific server and/or channel, a sound is played using the HexChat /SPLAY 
 The command syntax follows this format:
 /SSOUND [server name] #[channel name] sound [sound file] match [match]
 
-The [match] is interpreted as a Lua pattern: https://www.lua.org/pil/20.2.html
+If any of [server name], #[channel name], [sound file], or [match] have spaces, they must be wrapped in parenthesis.
 
-Only one of [server name] and #[channel name] are required, but at least one must be given.
-
-If any of [server name], [channel name], [sound file], or [match] have spaces, they must be wrapped in parenthesis.
 Note that the channel name will have the # on the outside of the parenthesis.
-If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to be escaped with the %.
+
+If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to have % added before each ( and ).
+
+The [server name], #[channel name], and [match] are interpreted as a Lua patterns: https://www.lua.org/pil/20.2.html
+
+If [server name] or #[channel name] are left out, they'll be filled in using the server and channel the command is typed into.
 
 Lastly, if a [server name] needs to begin with a / then the whole name, including the / must be wrapped in parenthesis:
 (/ServerName)
 
-Example:
+EXAMPLES
 
 /SSOUND (/my server) #(a channel) sound (H:\this sound.wav) match (:%-%%) tehee %%(%-:)
 
-Note that in this example, the the full pattern as seen by Lua for the match is:
-:%-%) tehee %(%-:
+  Note that in this example, the the full pattern as seen by Lua for the match is:
+  :%-%) tehee %(%-:
 
-This will match any message with the following in it:
-:-) tehee (-:
+  This will match any message with the following in it:
+  :-) tehee (-:
 
-EXAMPLES
-
-Play sound from D:\friend.wav when your friend's name is mentioned:
 /SSOUND freenode #irc sound D:\friend.wav match friends_nick
 
-Show all sounds set for server freenode channel #irc:
+  Plays sound from D:\friend.wav when your friend's name is mentioned
+
 /SSOUND freenode #irc
 
-Set the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on any server:
+  Shows all sounds set for server freenode channel #irc
+
 /SSOUND #(.*help.*) sound (D:\attention attention.wav)
-Note, this will not play the sound, as no match has been specified yet:
+
+  Sets the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on any server
+
+  Note, this will not play the sound, as no match has been specified yet:
+  
 /SSOUND #(.*help.*) match (%?)
-Now it will match anything with a question mark in it.
+
+  Now it will match anything with a question mark in it
 
 ]])
