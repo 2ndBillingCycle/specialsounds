@@ -13,7 +13,7 @@
      - - /show                                                                      ✗
      - - - /showall                                                                 ✗
      - - /add                                                                       ✗
-     - /delete                                                                      ✗
+     - /delete                                                                      ✓
      - /deleteall                                                                   ✗
      - /lex                                                                         ✗
      - - Prints tokens
@@ -31,32 +31,6 @@
      - - Detect if not installed in plugins folder
      - - Suggest to /ssound /link to link from where it is into the plugins folder   
 
-
-
-     It's ALIIIVE!
-
-     A lot of stuff isn't working in the way I'd like:
-      - Now that there can be multiple matches / server+channel, cannot delete a sound+match group
-      - neither server nor channel are treated as a pattern
-      - - Having to specify %. in server names is annoying
-      - - One way to avoid this is to autofill an empty server and/or channel with the current server and/or channel the command is typed into
-      - An action should be created to /stop ssound
-      - There's a lot of noise on startup
-      - - Reviewing where the noise is coming from and adding if blocks to not call noisy functions would be helpful, instead of relying on them performing input testing
-      - - Adding a /debug {on | off} action would probably be a good idea, and then searching for prints and surroundinf with an if debug block
-    
-    Current idea for dealing with multiple sound+match settings / server+channel:
-     - /ssound server #channel lists each sound+match block with a number that a /delete action could understand:
-           /ssound /delete [server] [#channel] 1
-           /ssound /deleteall [server] [#channel]
-           /ssound /search (.*) #(.*)
-           /ssound /deleteall (.*) #(.*)
-    
-    Also, default action should be changed to /get_or_set, that then calls a /get and /set action
-     - /set treats server and #channel as strings
-     - /get and /delete and such treat them as patterns
-    
-    Lastly, /echo should be changed to /lex, and a /parse function should be added to read back which action it detects, and what the action will do, like a dry run
 --]]
 
 ---[[
@@ -119,8 +93,6 @@ string.escape_quotes = function (str)
   end
   return str
 end
-
-settings.debug_on = "yes"
 
 -- Neither this lexer nor parser are pretty. A very pretty one is at:
 -- https://github.com/stravant/LuaMinify/blob/master/ParseLua.lua
@@ -647,9 +619,11 @@ local function set_settings (server, channel, sound, match)
   local sound = sound or ""
   local match = match or ""
 
-  print_message(([[
+  if settings.debug_on then
+    print_message(([[
 Set settings for: %s #%s
 ]]):format(unstrip_parenthesis_group(server),unstrip_parenthesis_group(channel)))
+  end
 
   local exit_value = store_settings(server, channel, sound, match)
   if not exit_value then
@@ -666,9 +640,11 @@ local function get_settings (server, channel)
   local server = server or ""
   local channel = channel or ""
 
-  print_message(([[
+  if settings.debug_on then
+    print_message(([[
 Get settings for: %s #%s
 ]]):format(server, channel ~= "" and channel or "()"))
+  end
 
   for sound, match in retrieve_settings(server, channel) do
     if type(sound) ~= "string" or type(match) ~= "string" then
@@ -815,8 +791,8 @@ Parser error: %s
     print_error(error_message)
   end
 
-  local show_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel
-  local autofill_server_channel, lex_action, inner_parse
+  local sinner_parse, how_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel
+  local autofill_server_channel, lex_action, debug_action
 
   function lex_action ()
     local reconstructed_command = ""
@@ -831,6 +807,29 @@ Tokens:
 ]]):format(tostring(reconstructed_command)))
     print_tokens(tokens)
     return true
+  end
+
+  function debug_action ()
+    if position > #tokens then
+      return true
+    end
+
+    local token = tokens[position]
+    if token.name == "text" and token.value:match("^on$") then
+      print_message("Extra messages turned on")
+      settings.debug_on = token.value
+      hexchat.pluginprefs.debug_on = token.value
+      position = position + 1
+      return debug_action()
+    elseif token.name == "text" and token.value:match("^off$") then
+      settings.debug_on = nil
+      hexchat.pluginprefs.debug_on = nil
+      position = position + 1
+      return debug_action()
+    else
+      parser_error("Expected on or off:", position)
+      return false
+    end
   end
 
   function delete_action ()
@@ -976,6 +975,7 @@ Channel: %s
   
 
   action_table["lex"] = lex_action
+  action_table["debug"] = debug_action
   action_table["delete"] = delete_action
   action_table["show_or_add_or_delete"] = show_or_add_or_delete 
 
