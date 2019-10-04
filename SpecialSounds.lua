@@ -310,6 +310,10 @@ Here:
 
   function inner_lex ()
     if position > #str then
+      if #tokens < 1 then
+        print_error("Empty command invocation\nFor help, type:\n/HELP SSOUND")
+        return false
+      end
       return true
     end
 
@@ -815,8 +819,8 @@ Tokens:
     if position > #tokens then
       if debug_setting then
         print_message("Extra messages turned on")
-        settings.debug_on = token.value
-        hexchat.pluginprefs.debug_on = token.value
+        settings.debug_on = "on"
+        hexchat.pluginprefs.debug_on = "on"
       else
         settings.debug_on = nil
         hexchat.pluginprefs.debug_on = nil
@@ -843,11 +847,14 @@ Tokens:
     if position > #tokens then
       if echo_setting then
         if settings.debug_on then
-          print_message("Extra messages turned on")
+          print_message("Commands will be echoed")
         end
-        settings.echo_on = token.value
-        hexchat.pluginprefs.echo_on = token.value
+        settings.echo_on = "on"
+        hexchat.pluginprefs.echo_on = "on"
       else
+        if settings.debug_on then
+          print_message("Commands will no longer be echoed")
+        end
         settings.echo_on = nil
         hexchat.pluginprefs.echo_on = nil
       end
@@ -1020,7 +1027,7 @@ Channel: %s
   function inner_parse ()
     if position > #tokens then
       if #action < 1 then
-        parser_error("No action found")
+        parser_error("No action found", #tokens)
         return false
       end
       return action_table[action]()
