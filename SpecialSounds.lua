@@ -748,6 +748,7 @@ local function parse (str)
   local number = false
   local debug_setting = false
   local echo_setting = false
+  local parse_setting = false
   local action = ""
   local action_table = {}
   local function is_symbol (str)
@@ -798,7 +799,7 @@ Parser error: %s
   end
 
   local sinner_parse, how_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel
-  local autofill_server_channel, lex_action, debug_action, echo_action
+  local autofill_server_channel, lex_action, debug_action, echo_action, parse_action
 
   function lex_action ()
     local reconstructed_command = ""
@@ -819,11 +820,25 @@ Tokens:
     if position > #tokens then
       if debug_setting then
         print_message("Extra messages turned on")
-        settings.debug_on = "on"
-        hexchat.pluginprefs.debug_on = "on"
+        if parse_setting then
+          parse_setting = false
+          settings.debug_on = hexchat.pluginprefs.debug_on
+          print_message("Parse: Turned debug on")
+          return true
+        else
+          settings.debug_on = "on"
+          hexchat.pluginprefs.debug_on = "on"
+        end
       else
-        settings.debug_on = nil
-        hexchat.pluginprefs.debug_on = nil
+        if parse_setting then
+          parse_setting = false
+          settings.debug_on = hexchat.pluginprefs.debug_on
+          print_message("Parse: Turned debug off")
+          return true
+        else
+          settings.debug_on = nil
+          hexchat.pluginprefs.debug_on = nil
+        end
       end
       return true
     end
@@ -849,14 +864,28 @@ Tokens:
         if settings.debug_on then
           print_message("Commands will be echoed")
         end
-        settings.echo_on = "on"
-        hexchat.pluginprefs.echo_on = "on"
+        if parse_setting then
+          parse_setting = false
+          settings.debug_on = hexchat.pluginprefs.debug_on
+          print_message("Parse: Turned echo on")
+          return true
+        else
+          settings.echo_on = "on"
+          hexchat.pluginprefs.echo_on = "on"
+        end
       else
         if settings.debug_on then
           print_message("Commands will no longer be echoed")
         end
-        settings.echo_on = nil
-        hexchat.pluginprefs.echo_on = nil
+        if parse_setting then
+          parse_setting = false
+          settings.debug_on = hexchat.pluginprefs.debug_on
+          print_message("Turned echo off")
+          return true
+        else
+          settings.echo_on = nil
+          hexchat.pluginprefs.echo_on = nil
+        end
       end
       return true
     end
@@ -876,10 +905,28 @@ Tokens:
     end
   end
 
+  function parse_action ()
+    parse_setting = true
+    settings.debug_on = "on"
+    return inner_parse()
+  end
+
   function delete_action ()
     if position > #tokens then
       if #server > 0 and #channel > 0 and number ~= false then
-        return delete_setting(server, channel, number)
+        if parse_setting then
+          parse_setting = false
+          settings.debug_on = hexchat.pluginprefs.debug_on
+          print_message(([[
+Parse: Deleted setting
+Server: %s
+Channel: %s
+Number: %s
+]]):format(server, channel, tostring(number)))
+          return true
+        else
+          return delete_setting(server, channel, number)
+        end
       elseif #server > 0 or #channel > 0 then
         parser_error("Cannot determine item to delete", #tokens)
         return false
@@ -1021,6 +1068,7 @@ Channel: %s
   action_table["lex"] = lex_action
   action_table["debug"] = debug_action
   action_table["echo"] = echo_action
+  action_table["parse"] = parse_action
   action_table["delete"] = delete_action
   action_table["show_or_add_or_delete"] = show_or_add_or_delete 
 
@@ -1030,7 +1078,8 @@ Channel: %s
         parser_error("No action found", #tokens)
         return false
       end
-      return action_table[action]()
+      print_error("Nothing left to parse", #tokens)
+      return true
     end
 
     local token = tokens[position]
