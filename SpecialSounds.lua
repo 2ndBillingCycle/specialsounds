@@ -4,22 +4,22 @@
      - Settings Printer                                                             ✓
      - Settings Setter                                                              -
      - Settings Getter                                                              -
-     - Hook function                                                                -
+     - Hook function                                                                ✓
      - - Receive Channel Message
      - - Settings Getter on sever and channel
      - - Recurse through matches, /SPLAY-ing every match's sound
-     - /show_or_add                                                                 ✗
+     - /show_or_add_or_delete                                                       ✗
      - - Autofills with current context
      - - /show                                                                      ✗
      - - - /showall                                                                 ✗
      - - /add                                                                       ✗
      - /delete                                                                      ✓
      - /deleteall                                                                   ✗
-     - /lex                                                                         ✗
+     - /lex                                                                         ✓
      - - Prints tokens
      - /parse                                                                       ✗
      - - Dry run with /debug on
-     - /debug                                                                       ✗
+     - /debug                                                                       ✓
      - /echo                                                                        ✗
      - on/off: echos command
      - Tab completion                                                               ✗
@@ -135,7 +135,7 @@ local function lex (str)
     1 item in length, all the rest of the table items will return
     as nil.
   --]]
-  if not str or #str < 1 then
+  if type(str) ~= "string" or #str < 1 then
     print_error("Empty command invocation\nFor help, type:\n/HELP SSOUND")
     return false
   end
@@ -742,6 +742,8 @@ local function parse (str)
   local sound = ""
   local match = ""
   local number = false
+  local debug_setting = false
+  local echo_setting = false
   local action = ""
   local action_table = {}
   local function is_symbol (str)
@@ -792,7 +794,7 @@ Parser error: %s
   end
 
   local sinner_parse, how_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel
-  local autofill_server_channel, lex_action, debug_action
+  local autofill_server_channel, lex_action, debug_action, echo_action
 
   function lex_action ()
     local reconstructed_command = ""
@@ -811,21 +813,56 @@ Tokens:
 
   function debug_action ()
     if position > #tokens then
+      if debug_setting then
+        print_message("Extra messages turned on")
+        settings.debug_on = token.value
+        hexchat.pluginprefs.debug_on = token.value
+      else
+        settings.debug_on = nil
+        hexchat.pluginprefs.debug_on = nil
+      end
       return true
     end
 
     local token = tokens[position]
     if token.name == "text" and token.value:match("^on$") then
-      print_message("Extra messages turned on")
-      settings.debug_on = token.value
-      hexchat.pluginprefs.debug_on = token.value
+      debug_setting = true
       position = position + 1
       return debug_action()
     elseif token.name == "text" and token.value:match("^off$") then
-      settings.debug_on = nil
-      hexchat.pluginprefs.debug_on = nil
+      debug_setting = false
       position = position + 1
       return debug_action()
+    else
+      parser_error("Expected on or off:", position)
+      return false
+    end
+  end
+
+  function echo_action ()
+    if position > #tokens then
+      if echo_setting then
+        if settings.debug_on then
+          print_message("Extra messages turned on")
+        end
+        settings.echo_on = token.value
+        hexchat.pluginprefs.echo_on = token.value
+      else
+        settings.echo_on = nil
+        hexchat.pluginprefs.echo_on = nil
+      end
+      return true
+    end
+
+    local token = tokens[position]
+    if token.name == "text" and token.value:match("^on$") then
+      echo_setting = true
+      position = position + 1
+      return echo_action()
+    elseif token.name == "text" and token.value:match("^off$") then
+      echo_setting = false
+      position = position + 1
+      return echo_action()
     else
       parser_error("Expected on or off:", position)
       return false
@@ -976,6 +1013,7 @@ Channel: %s
 
   action_table["lex"] = lex_action
   action_table["debug"] = debug_action
+  action_table["echo"] = echo_action
   action_table["delete"] = delete_action
   action_table["show_or_add_or_delete"] = show_or_add_or_delete 
 
@@ -1031,6 +1069,9 @@ local function print_message (message) print(message) end
 
 
 function hook_command (words, word_eols)
+  if type(word_eols[1]) ~= "nil" and settings.echo_on then
+    print_message("/" .. tostring(word_eols[1]))
+  end
   local exit_value = parse(word_eols[2])
   if not exit_value then
     print_error("Sorry, could not understand command")
