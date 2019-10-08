@@ -10,17 +10,17 @@
      - - Recurse through matches, /SPLAY-ing every match's sound
      - /show_or_add_or_delete                                                       ✗
      - - Autofills with current context
-     - - /show                                                                      ✗
+     - - /show                                                                      ✓
      - - - /showall                                                                 ✗
-     - - /add                                                                       ✗
+     - - /add                                                                       ✓
      - /delete                                                                      ✓
      - /deleteall                                                                   ✗
      - /lex                                                                         ✓
      - - Prints tokens
-     - /parse                                                                       ✗
+     - /parse                                                                       ✓
      - - Dry run with /debug on
      - /debug                                                                       ✓
-     - /echo                                                                        ✗
+     - /echo                                                                        ✓
      - on/off: echos command
      - Tab completion                                                               ✗
      - - watching for the Tab key, to autofill actions, server names, channels, etc
@@ -30,7 +30,58 @@
      - /link                                                                        ✗
      - - Detect if not installed in plugins folder
      - - Suggest to /ssound /link to link from where it is into the plugins folder   
+     - /patterns                                                                    ✗
+     - - on/off treat server, channel, match as patterns or not                      
 
+All of these should /parse
+/SSOUND /delete server #channel 1
+/SSOUND /delete server 1
+/SSOUND /delete #channel 1
+/SSOUND /delete 1
+/SSOUND /add server #channel sound H:\sound.wav match (match pattern)
+/SSOUND /add server #channel sound H:\sound.wav
+/SSOUND /add server #channel match pattern
+/SSOUND /add server match pattern
+/SSOUND /add #channel match pattern
+/SSOUND /add match pattern
+/SSOUND /add (match) match pattern
+/SSOUND /show
+/SSOUND /show server
+/SSOUND /show #channel
+/SSOUND /show server #channel
+
+The big questions were what to do with
+
+/SSOUND match
+
+and
+
+/SSOUND match match
+
+and
+
+/SSOUND match match match
+
+The first could use "match" as the server name, but then the second would error, saying it doesn't know what the
+second "match" is supposed to be.
+
+If it gives an error saying it's expecting a pattern, then the second will work fine, autofilling for the missing server name.
+
+The third command, then, should treat the first "match" as the server name, but this would be difficult to implement, as the
+parser would have to look ahead to see if it can disambiguate what the current token should mean.
+
+Something like
+
+/SSOUND match match sound sound
+
+Would be tough to disambiguate: did they mean to elide the server name, or is the server named "match", the pattern is "sound",
+and they forgot to specify the sound file.
+
+I could add assumptions about what people are likely to want, but that would get out of hand, quickly.
+
+So the only assumption I'll make is that it's unlikely people will have a server with "sound" or "match" in the hostname.
+
+For now, "match" and "sound" are reserved keywords.
 --]]
 
 ---[[
@@ -99,8 +150,8 @@ end
 
 -- Currently, no fancy printing is done
 -- In the future, these could be set to make a private message, or something
-local function print_error (message) print(message) end
-local function print_message (message) print(message) end
+local function print_error (message) print(message .. "\n\n") end
+local function print_message (message) print(message .. "\n\n") end
 
 ---[[ Debug
 local function printvars (message, tbl)
@@ -136,7 +187,7 @@ local function lex (str)
     as nil.
   --]]
   if type(str) ~= "string" or #str < 1 then
-    print_error("Empty command invocation\nFor help, type:\n/HELP SSOUND")
+    print_error("Empty command invocation\nFor help, type:\n/ssound /help")
     return false
   end
 
@@ -191,9 +242,7 @@ This is the group:
 %s
 
 The full command is:
-/%s %s
-
-]]):format(missing_paren, parenthesis_group, command_name, str)
+/%s %s]]):format(missing_paren, parenthesis_group, command_name, str)
     )
   end
 
@@ -204,9 +253,7 @@ Found unexpected character:
 
 Here:
 /%s %s
-%s
-
-]]):format(char, command_name, str, (" "):rep(position -1 + #command_name + 2) .. "^")
+%s]]):format(char, command_name, str, (" "):rep(position -1 + #command_name + 2) .. "^")
     )
   end
   --]]
@@ -313,7 +360,7 @@ Here:
   function inner_lex ()
     if position > #str then
       if #tokens < 1 then
-        print_error("Empty command invocation\nFor help, type:\n/HELP SSOUND")
+        print_error("Empty command invocation\nFor help, type:\n/ssound /help")
         return false
       end
       return true
@@ -370,7 +417,8 @@ local function unstrip_parenthesis_group (group_string)
     print_error("No group string passed")
     return group_string
   end
-  if group_string:match("%s") then
+  -- If the string has spaces in it, or if it's literally "match" or "sound", then wrap and escape it
+  if group_string:match("%s") or group_string:match("^sound$") or group_string:match("^match$") then
     group_string = group_string:gsub("([()])", "%%%1")
     group_string = "(" .. group_string .. ")"
   end
@@ -395,9 +443,7 @@ local function print_settings (server, channel, sound, match)
 Server:  %s
 Channel: #%s
 Sound:   %s
-Match:   %s
-
-]]):format(
+Match:   %s]]):format(
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   unstrip_parenthesis_group(sound),
@@ -616,9 +662,7 @@ local function all_servers_and_channels_settings ()
           print_error(([[
 Bad settings for
 server: %s
-channel: %s
-
-]]):format(tostring(server), tostring(channel)))
+channel: %s]]):format(tostring(server), tostring(channel)))
         end
         continue = true
       else
@@ -662,9 +706,7 @@ Overwriting settings:
 Server: %s
 Channel: #%s
 Sound: %s
-Match: %s
-
-]]):format(
+Match: %s]]):format(
     unstrip_parenthesis_group(server),
     unstrip_parenthesis_group(channel),
     unstrip_parenthesis_group(sound),
@@ -677,9 +719,7 @@ Overwriting settings:
 Server: %s
 Channel: #%s
 Sound: %s
-Match: %s
-
-]]):format(
+Match: %s]]):format(
     unstrip_parenthesis_group(server),
     unstrip_parenthesis_group(channel),
     unstrip_parenthesis_group(curr_sound),
@@ -712,9 +752,10 @@ local function set_settings (server, channel, sound, match)
   local match = match or ""
 
   if settings.debug_on then
-    print_message(([[
-Set settings for: %s #%s
-]]):format(unstrip_parenthesis_group(server),unstrip_parenthesis_group(channel)))
+    print_message(("Set settings for: %s #%s"):format(
+      unstrip_parenthesis_group(server),
+      unstrip_parenthesis_group(channel)
+    ))
   end
 
   local exit_value = store_settings(server, channel, sound, match)
@@ -733,9 +774,7 @@ local function get_settings (server, channel)
   local channel = channel or ""
 
   if settings.debug_on then
-    print_message(([[
-Get settings for: %s #%s
-]]):format(
+    print_message(("Get settings for: %s #%s"):format(
       server ~= "" and server or "()",
       channel ~= "" and channel or "()"
     ))
@@ -768,9 +807,7 @@ local function delete_setting (server, channel, number)
 No settings found matching:
 Server:  %s
 Channel: #%s
-Number:  %s
-
-]]):format(
+Number:  %s]]):format(
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   tostring(number)
@@ -790,9 +827,7 @@ Server:  %s
 Channel: #%s
 Number:  %s
 Sound:   %s
-Match:   %s
-
-]]):format(
+Match:   %s]]):format(
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   tostring(number),
@@ -831,8 +866,7 @@ local function print_tokens (tokens)
 Token %s name:
 %s
 Token %s value:
-%s
-]]):format(tostring(i), tokens[i].name, tostring(i), tokens[i].value))
+%s]]):format(tostring(i), tokens[i].name, tostring(i), tokens[i].value))
   end
   return true
 end
@@ -879,6 +913,11 @@ local function parse (str)
   string.is_set_parameter = is_set_parameter
 
   local function parser_error (message, index)
+    if index > #tokens then
+      index = #tokens
+    else
+      index = index - 1
+    end
     local command_string = ("/%s "):format(command_name)
     local chars_up_to_error_token = #command_string
 
@@ -890,7 +929,7 @@ local function parse (str)
       end
     end
 
-    for i=1, (index - 1) do
+    for i=1, index do
       if tokens[i].name == "hashmark" then
         chars_up_to_error_token = chars_up_to_error_token + #tokens[i].value
       else
@@ -901,15 +940,94 @@ local function parse (str)
     local error_message = ([[
 Parser error: %s
 %s
-%s
-
-]]):format(message, command_string, (" "):rep(chars_up_to_error_token) .. "^")
+%s]]):format(message, command_string, (" "):rep(chars_up_to_error_token) .. "^")
 
     print_error(error_message)
   end
 
   local sinner_parse, how_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel
-  local autofill_server_channel, lex_action, debug_action, echo_action, parse_action, add_action, show_action
+  local autofill_server_channel, lex_action, debug_action, echo_action, parse_action, add_action, show_action, help_action
+
+  function help_action ()
+    print_message([[
+SHORT DESCRIPTION
+
+Plays a specified sound when an incoming Channel Message matches a configurable pattern.
+
+DESCRIPTION
+
+This command helps configure this plugin so that when a message is received that matches a pattern
+in a specific server and/or channel, a sound is played using the HexChat /SPLAY command.
+
+The command syntax follows this format:
+/SSOUND [server name] #[channel name] sound [sound file] match [pattern]
+
+If any of [server name], #[channel name], [sound file], or [pattern] have spaces, they must be wrapped in parenthesis.
+
+Note that the channel name will have the # on the outside of the parenthesis.
+
+If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to have % added before each ( and ).
+
+If [server name] or #[channel name] are left out, they'll be filled in using the server and channel the command is typed into.
+
+Because of this, if a server is named "match" or "sound", it must be wrapped in parenthesis when typed in a command. Because channel names
+always start with a # they are exempt from this rule:
+
+/SSOUND (match) #sound sound H:\sound.wav match (word)
+
+Also, if a [server name] needs to begin with a / then the whole name, including the / must be wrapped in parenthesis. Again, channels are unaffected:
+
+/SSOUND (/Server Name) #/channel
+
+The [pattern] can be a word, or a phrase, and will match any message that contains that exact word or phrase, letter for letter.
+
+The [pattern] is case-sensitive.
+
+Also, the [server name] and #[channel name] are also treated this way, so a channel name of #a whill match any channel that has "a" in the name.
+
+To be more precise, the [server name], #[channel name], and [match] are interpreted as a Lua patterns: https://www.lua.org/pil/20.2.html
+
+With two servers named "server" and "awesome server", the name (server) will match both.
+
+Specifying (^server$) will match exactly "server" and nothing else.
+
+Be warned when using anchors, as this plugin uses the hostname of the server the Channel Message is received from, and not the name that is
+in the HexChat Network List.
+
+Eliding the server and/or channel and issuing the command from the channel where this plugin should watch for a [pattern] should suffice.
+
+EXAMPLES
+
+/SSOUND (/my server) #(a channel) sound (H:\this sound.wav) match (:%-%%) tehee %%(%-:)
+
+  Note that in this example, the the full pattern as seen by Lua for the match is:
+  :%-%) tehee %(%-:
+
+  This will match any message with the following in it:
+  :-) tehee (-:
+
+/SSOUND freenode #irc sound D:\friend.wav match friends_nick
+
+  Plays sound from D:\friend.wav when your friend's name is mentioned
+
+/SSOUND freenode #irc
+
+  Shows all sounds set for server freenode channel #irc
+
+/SSOUND #(.*help.*) sound (D:\attention attention.wav)
+
+  Sets the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on any server
+
+  Note, this will not play the sound, as no match has been specified yet:
+  
+/SSOUND #(.*help.*) match (%?)
+
+  Now it will match anything with a question mark in it
+
+
+]])
+    return true
+  end
 
   function lex_action ()
     local reconstructed_command = ""
@@ -920,8 +1038,7 @@ Parser error: %s
     print_message(([[
 Command:
 %s
-Tokens:
-]]):format(tostring(reconstructed_command)))
+Tokens:]]):format(tostring(reconstructed_command)))
     print_tokens(tokens)
     return true
   end
@@ -1015,6 +1132,7 @@ Tokens:
     end
   end
 
+  -- NOTE: Doesn't reset debug_on when a function fails parsing, or errors out
   function parse_action ()
     parse_setting = true
     settings.debug_on = "on"
@@ -1031,9 +1149,7 @@ Tokens:
 Parse: Deleted setting
 Server: %s
 Channel: #%s
-Number: %s
-
-]]):format(
+Number: %s]]):format(
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   tostring(number)
@@ -1043,7 +1159,7 @@ Number: %s
           return delete_setting(server, channel, number)
         end
       elseif #server > 0 or #channel > 0 then
-        parser_error("Cannot determine item to delete", #tokens)
+        parser_error("Cannot determine item to delete", position)
         return false
       end
     end
@@ -1060,9 +1176,7 @@ Number: %s
           print_error(([[
 Something wrong with server or channel name:
 Server: %s
-Channel: %s
-
-]]):format( tostring(server) , tostring(channel) ))
+Channel: %s]]):format( tostring(server) , tostring(channel) ))
           return false
         end
         position = position + 1
@@ -1071,7 +1185,7 @@ Channel: %s
         parser_error("Cannot determine number", position)
         return false
       end
-    elseif #server < 1 or token.name == "hashmark" then
+    elseif (#server < 1 and token.name ~= "hashmark") or (#channel < 1 and token.name == "hashmark") then
       local exit_value = parse_server_channel()
       if not exit_value then return false end
 
@@ -1088,6 +1202,10 @@ Channel: %s
   end
 
   function parse_sound ()
+    if position > #tokens then
+      parser_error("Expected sound file", position)
+      return false
+    end
     local token = tokens[position]
     if token.name == "parenthesis_group" then
       sound = strip_parenthesis_group(token.value)
@@ -1106,6 +1224,10 @@ Channel: %s
   end
 
   function parse_match ()
+    if position > #tokens then
+      parser_error("Expected match pattern", position)
+      return false
+    end
     local token = tokens[position]
     if token.name == "parenthesis_group" then
       match = strip_parenthesis_group(token.value)
@@ -1131,7 +1253,7 @@ Channel: %s
       end
 
       if #sound < 1 and #match < 1 then
-        parser_error("Neither sound nor match were given", #tokens)
+        parser_error("Neither sound nor match were given", position)
         return false
       end
 
@@ -1143,9 +1265,7 @@ Adding settings:
 Server:  %s
 Channel: #%s
 Sound:   %s
-Match:   %s
-
-]]):format(
+Match:   %s]]):format(
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   unstrip_parenthesis_group(sound),
@@ -1158,19 +1278,20 @@ Match:   %s
     end
 
     local token = tokens[position]
-    if token.name == "text" and token.value == "sound" then
+    if #sound < 1 and token.name == "text" and token.value == "sound" then
       position = position + 1
       local exit_value = parse_sound()
       if not exit_value then return exit_value end
       return add_action()
 
-    elseif token.name == "text" and token.value == "match" then
+    elseif #match < 1 and token.name == "text" and token.value == "match" then
       position = position + 1
       local exit_value = parse_match()
       if not exit_value then return exit_value end
       return add_action()
 
-    elseif #server < 1 or token.name == "hashmark" then
+    elseif #sound < 1 and #match < 1 and
+           ((#server < 1 and token.name ~= "hashmark") or (#channel < 1 and token.name == "hashmark")) then
       local exit_value = parse_server_channel()
       if not exit_value then return exit_value end
       return add_action()
@@ -1196,9 +1317,7 @@ Match:   %s
         print_message(([[
 Showing settings:
 Server:  %s
-Channel: #%s
-
-]]):format(
+Channel: #%s]]):format(
   unstrip_parenthesis_group(server), 
   unstrip_parenthesis_group(channel)
 ))
@@ -1209,7 +1328,7 @@ Channel: #%s
     end
 
     local token = tokens[position]
-    if #server < 1 or token.name == "hashmark" then
+    if (#server < 1 and token.name ~= "hashmark") or (#channel < 1 and token.name == "hashmark") then
       local exit_value = parse_server_channel()
       if not exit_value then return exit_value end
       return show_action()
@@ -1225,7 +1344,7 @@ Channel: #%s
   function parse_server_channel ()
     if position > #tokens or #server > 0 or #channel > 0 then
       local token = tokens[position]
-      if type(token) == "table" and token.name == "hashmark" then
+      if #channel < 1 and type(token) == "table" and token.name == "hashmark" then
         -- Do nothing, thereby continuing
       else
         return true
@@ -1289,8 +1408,30 @@ Channel: #%s
     return true
   end
 
+  function show_or_add_or_delete ()
+    if position > #tokens then
+      if #sound < 1 and #match < 1 then
+        -- Since nothing below matched, it's show
+      end
+    end
+
+    local token = tokens[position]
+    if position == #tokens and token.name == "number" and #sound < 1 and #match < 1 then
+      -- It's delete
+    elseif token.name == "text" and ((#sound < 1 and token.value == "sound") or (#match < 1 and token.value == "match")) then
+      -- It's add
+    elseif #sound < 1 and #match < 1 and
+           ((#server < 1 and token.name ~= "hashmark") or (#channel < 1 and token.name == "hashmark")) then 
+      -- Don't know what it is until the server and/or channel names are parsed
+    else
+      parser_error("Unexpected " .. token.name:gsub("_", " "))
+      return false
+    end
+  end
+
   
 
+  action_table["help"] = help_action
   action_table["lex"] = lex_action
   action_table["debug"] = debug_action
   action_table["echo"] = echo_action
@@ -1303,10 +1444,10 @@ Channel: #%s
   function inner_parse ()
     if position > #tokens then
       if #action < 1 then
-        parser_error("No action found", #tokens)
+        parser_error("No action found", position)
         return false
       end
-      print_error("Nothing left to parse", #tokens)
+      print_error("Nothing left to parse")
       return true
     end
 
@@ -1356,7 +1497,7 @@ function hook_command (words, word_eols)
   end
   local exit_value = parse(word_eols[2])
   if not exit_value then
-    print_error("Sorry, could not understand command\n\n")
+    print_error("Sorry, could not understand command")
   end
   
   return hexchat.EAT_ALL
@@ -1428,67 +1569,6 @@ end
 setup()
 
 -- Set the function to be called when the command is invoked, and the help text
-hook_objects[#hook_objects + 1] = hexchat.hook_command(command_name, hook_command, [[
-Pleays special sound on special message
-
-DESCRIPTION
-
-This command helps configure this plugin so that when a message is received that matches a pattern
-in a specific server and/or channel, a sound is played using the HexChat /SPLAY command.
-
-The command syntax follows this format:
-/SSOUND [server name] #[channel name] sound [sound file] match [match]
-
-If any of [server name], #[channel name], [sound file], or [match] have spaces, they must be wrapped in parenthesis.
-
-Note that the channel name will have the # on the outside of the parenthesis.
-
-If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to have % added before each ( and ).
-
-The [server name], #[channel name], and [match] are interpreted as a Lua patterns: https://www.lua.org/pil/20.2.html
-
-If [server name] or #[channel name] are left out, they'll be filled in using the server and channel the command is typed into.
-
-Lastly, if a [server name] needs to begin with a / then the whole name, including the / must be wrapped in parenthesis:
-(/ServerName)
-
-EXAMPLES
-
-/SSOUND (/my server) #(a channel) sound (H:\this sound.wav) match (:%-%%) tehee %%(%-:)
-
-  Note that in this example, the the full pattern as seen by Lua for the match is:
-  :%-%) tehee %(%-:
-
-  This will match any message with the following in it:
-  :-) tehee (-:
-
-/SSOUND freenode #irc sound D:\friend.wav match friends_nick
-
-  Plays sound from D:\friend.wav when your friend's name is mentioned
-
-/SSOUND freenode #irc
-
-  Shows all sounds set for server freenode channel #irc
-
-/SSOUND #(.*help.*) sound (D:\attention attention.wav)
-
-  Sets the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on any server
-
-  Note, this will not play the sound, as no match has been specified yet:
-  
-/SSOUND #(.*help.*) match (%?)
-
-  Now it will match anything with a question mark in it
-
-/SSOUND /delete server #channel 1
-/SSOUND /delete server 1
-/SSOUND /delete #channel 1
-/SSOUND /delete 1
-/SSOUND /add server #channel sound H:\sound.wav match (match pattern)
-/SSOUND /add server #channel sound H:\sound.wav
-/SSOUND /add server #channel match pattern
-/SSOUND /add server match pattern
-/SSOUND /add #channel match pattern
-/SSOUND /add match pattern
-/SSOUND /add (match) match pattern
-]])
+hook_objects[#hook_objects + 1] = hexchat.hook_command(command_name, hook_command,
+  "Usage: SSOUND [server] #[channel] sound [sound file] match [pattern], Plays a sound when a Channel Message matches a pattern"
+)
