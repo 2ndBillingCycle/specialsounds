@@ -8,7 +8,7 @@
      - - Receive Channel Message
      - - Settings Getter on sever and channel
      - - Recurse through matches, /SPLAY-ing every match's sound
-     - /show_or_add_or_delete                                                       ✗
+     - /show_or_add_or_delete                                                       ✓
      - - Autofills with current context
      - - /show                                                                      ✓
      - - - /showall                                                                 ✗
@@ -33,22 +33,28 @@
      - /patterns                                                                    ✗
      - - on/off treat server, channel, match as patterns or not                      
 
-All of these should /parse
-/SSOUND /delete server #channel 1
-/SSOUND /delete server 1
-/SSOUND /delete #channel 1
-/SSOUND /delete 1
+All of these should /parse, and should not need the /action
+Run all through and in order, they should delete all the settings they add
 /SSOUND /add server #channel sound H:\sound.wav match (match pattern)
 /SSOUND /add server #channel sound H:\sound.wav
 /SSOUND /add server #channel match pattern
 /SSOUND /add server match pattern
-/SSOUND /add #channel match pattern
-/SSOUND /add match pattern
-/SSOUND /add (match) match pattern
-/SSOUND /show
+/SSOUND /add server sound sound
+/SSOUND /add #channel match word
+/SSOUND /add #channel sound sound.wav
+/SSOUND /add match (pitter patter)
+/SSOUND /add sound rain.wav
+/SSOUND /add (match) match match sound sound
+/SSOUND /show server #channel
 /SSOUND /show server
 /SSOUND /show #channel
-/SSOUND /show server #channel
+/SSOUND /show 
+/SSOUND /delete server #channel 2
+/SSOUND /delete server #channel 1
+/SSOUND /delete server 1
+/SSOUND /delete #channel 1
+/SSOUND /delete 1
+
 
 The big questions were what to do with
 
@@ -187,8 +193,7 @@ local function lex (str)
     as nil.
   --]]
   if type(str) ~= "string" or #str < 1 then
-    print_error("Empty command invocation\nFor help, type:\n/ssound /help")
-    return false
+    str = ""
   end
 
   --[[
@@ -359,10 +364,6 @@ Here:
 
   function inner_lex ()
     if position > #str then
-      if #tokens < 1 then
-        print_error("Empty command invocation\nFor help, type:\n/ssound /help")
-        return false
-      end
       return true
     end
 
@@ -565,6 +566,86 @@ local function retrieve_settings (server, channel)
   end
 end
 
+local function match_settings (server, channel)
+  if type(server) ~= "string" or type(channel) ~= "string" then
+    return function () return nil end
+  end
+
+  local valid = {}
+  for key, val in pairs(settings) do
+    if key:match(settings_prefix .. "%[%[.-%]%]%[%[.-%]%]") and
+       val:match("sound = %[%[.-%]%]\nmatch = %[%[.-%]%]") then
+      valid[#valid + 1] = {key=key,val=val}
+    end
+  end
+
+  local keys_processed = {}
+  for i, tbl in ipairs(valid) do
+    local _server, _channel = tbl.key:match("(%[%[.-%]%])(%[%[.-%]%])")
+    keys_processed[#keys_processed + 1] = {
+      server = deserialize_string(_server),
+      channel = deserialize_string(_channel),
+      sound_match = {}
+    }
+    for sound, match in deserialize_sound_match(tbl.val) do
+      if type(sound) == "string" and type(match) == "string" then
+        local slen = #keys_processed[#keys_processed].sound_match
+        keys_processed[#keys_processed].sound_match[slen + 1] = {
+          sound = sound,
+          match = match
+        }
+      end
+    end
+  end
+
+  --[=[ Debug
+  for i, tbl in ipairs(keys_processed) do
+    print(([[
+server = %s
+channel = %s
+sound_match:
+]]):format(tbl.server, tbl.channel))
+    for i, stbl in ipairs(tbl.sound_match) do
+      print(([[
+sound = %s
+match = %s
+]]):format(stbl.sound, stbl.match))
+    end
+  end
+  --]=]
+
+  if #keys_processed < 1 then
+    return function () return nil end
+  end
+
+  local key_index = 1
+  local sound_match_index = 1
+  return function ()
+    while true do
+      if key_index > #keys_processed then
+        return nil, nil, nil, nil
+      end
+      if sound_match_index > #keys_processed[key_index].sound_match then
+        key_index = key_index + 1
+        sound_match_index = 1
+      else
+        local _server = keys_processed[key_index].server
+        local _channel = keys_processed[key_index].channel
+        if server:match(_server) and channel:match(_channel) then
+          local sound_match = keys_processed[key_index].sound_match[sound_match_index]
+          local sound = sound_match.sound
+          local match = sound_match.match
+          if type(sound) == "string" and type(match) == "string" then
+            sound_match_index = sound_match_index + 1
+            return _server, _channel, sound, match
+          end
+        end
+        sound_match_index = sound_match_index + 1
+      end
+    end
+  end
+end
+
 local function search_settings (server, channel)
   if type(server) ~= "string" or type(channel) ~= "string" then
     return function () return nil end
@@ -596,6 +677,22 @@ local function search_settings (server, channel)
       end
     end
   end
+
+  --[=[ Debug
+  for i, tbl in ipairs(keys_processed) do
+    print(([[
+server = %s
+channel = %s
+sound_match:
+]]):format(tbl.server, tbl.channel))
+    for i, stbl in ipairs(tbl.sound_match) do
+      print(([[
+sound = %s
+match = %s
+]]):format(stbl.sound, stbl.match))
+    end
+  end
+  --]=]
 
   if #keys_processed < 1 then
     return function () return nil end
@@ -983,9 +1080,9 @@ The [pattern] can be a word, or a phrase, and will match any message that contai
 
 The [pattern] is case-sensitive.
 
-Also, the [server name] and #[channel name] are also treated this way, so a channel name of #a whill match any channel that has "a" in the name.
+The [server name] and #[channel name] are also treated this way, so a channel name of #a whill match any channel that has "a" in the name.
 
-To be more precise, the [server name], #[channel name], and [match] are interpreted as a Lua patterns: https://www.lua.org/pil/20.2.html
+To be more precise, the [server name], #[channel name], and [match] are interpreted as Lua patterns: https://www.lua.org/pil/20.2.html
 
 With two servers named "server" and "awesome server", the name (server) will match both.
 
@@ -1016,7 +1113,7 @@ EXAMPLES
 
 /SSOUND #(.*help.*) sound (D:\attention attention.wav)
 
-  Sets the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on any server
+  Sets the sound file to (D:\attention attention.wav) for any channel with "help" in the name, on the server the command was typed in to.
 
   Note, this will not play the sound, as no match has been specified yet:
   
@@ -1161,6 +1258,9 @@ Number: %s]]):format(
       elseif #server > 0 or #channel > 0 then
         parser_error("Cannot determine item to delete", position)
         return false
+      else
+        parser_error("Ambiguous command", position)
+        return false
       end
     end
 
@@ -1171,7 +1271,6 @@ Number: %s]]):format(
     if position == #tokens and token.name == "number" then
       if token.value:match("^%d+$") and tonumber(token.value) then
         number = tonumber(token.value)
-
         if type(server) ~= "string" or type(channel) ~= "string" then
           print_error(([[
 Something wrong with server or channel name:
@@ -1179,12 +1278,16 @@ Server: %s
 Channel: %s]]):format( tostring(server) , tostring(channel) ))
           return false
         end
+
         position = position + 1
+        local exit_value = autofill_server_channel()
+        if not exit_value then return exit_value end
         return delete_action()
       else
         parser_error("Cannot determine number", position)
         return false
       end
+
     elseif (#server < 1 and token.name ~= "hashmark") or (#channel < 1 and token.name == "hashmark") then
       local exit_value = parse_server_channel()
       if not exit_value then return false end
@@ -1411,20 +1514,32 @@ Channel: #%s]]):format(
   function show_or_add_or_delete ()
     if position > #tokens then
       if #sound < 1 and #match < 1 then
-        -- Since nothing below matched, it's show
+        return show_action()
+      else
+        parser_error("Ambiguous command. Please report the command that caused this error.")
+        return false
       end
     end
 
     local token = tokens[position]
     if position == #tokens and token.name == "number" and #sound < 1 and #match < 1 then
-      -- It's delete
+      return delete_action()
+
     elseif token.name == "text" and ((#sound < 1 and token.value == "sound") or (#match < 1 and token.value == "match")) then
-      -- It's add
+      return add_action()
+
     elseif #sound < 1 and #match < 1 and
            ((#server < 1 and token.name ~= "hashmark") or (#channel < 1 and token.name == "hashmark")) then 
-      -- Don't know what it is until the server and/or channel names are parsed
+            
+      local exit_value = parse_server_channel()
+      if not exit_value then return exit_value end
+
+      exit_value = autofill_server_channel()
+      if not exit_value then return false end
+      
+      return show_or_add_or_delete()
     else
-      parser_error("Unexpected " .. token.name:gsub("_", " "))
+      parser_error("Unexpected " .. token.name:gsub("_", " "), position)
       return false
     end
   end
@@ -1439,13 +1554,17 @@ Channel: #%s]]):format(
   action_table["delete"] = delete_action
   action_table["add"] = add_action
   action_table["show"] = show_action
-  action_table["show_or_add_or_delete"] = show_or_add_or_delete 
+  action_table["show_or_add_or_delete"] = show_or_add_or_delete
+
+  local function default_action ()
+    action = "show_or_add_or_delete"
+    return action_table[action]()
+  end
 
   function inner_parse ()
     if position > #tokens then
       if #action < 1 then
-        parser_error("No action found", position)
-        return false
+        return default_action()
       end
       print_error("Nothing left to parse")
       return true
@@ -1463,8 +1582,7 @@ Channel: #%s]]):format(
     -- The default action is show_or_add_or_delete, so if none is specified, use that
     elseif token.name:is_symbol() or token.name == "hashmark" then
       -- position = position + 1 -- Don't skip over this token, because it's part of the action's parameter's
-      action = "show_or_add_or_delete"
-      return action_table[action]()
+      return default_action()
     else
       parser_error("Could not determine action", position)
     end
@@ -1474,7 +1592,7 @@ Channel: #%s]]):format(
 
 end
 
----[===[ Debug
+--[===[ Debug
 local function print_hook_args (...)
   for i=1, select('#', ...) do
     print(select(i, ...))
@@ -1518,7 +1636,7 @@ local function splay_on_matching_channel_message()
     end
 
     local message = hexchat.strip(tbl[2])
-    for server, channel, sound, match in search_settings(server, channel) do
+    for server, channel, sound, match in match_settings(server, channel) do
       if match ~= "" then -- "" will match anything
         local first_group = message:match(match)
         if type(first_group) == "string" and first_group ~= "" and sound ~= "" then
@@ -1564,11 +1682,10 @@ local function setup ()
   end
 
   hook_objects[#hook_objects + 1] = hexchat.hook_print("Channel Message", splay_on_matching_channel_message())
+  -- Set the function to be called when the command is invoked, and the help text
+  hook_objects[#hook_objects + 1] = hexchat.hook_command(command_name, hook_command,
+    "Usage: SSOUND [server] #[channel] sound [sound file] match [pattern], Plays a sound when a Channel Message matches a pattern"
+)
 end
 
 setup()
-
--- Set the function to be called when the command is invoked, and the help text
-hook_objects[#hook_objects + 1] = hexchat.hook_command(command_name, hook_command,
-  "Usage: SSOUND [server] #[channel] sound [sound file] match [pattern], Plays a sound when a Channel Message matches a pattern"
-)
