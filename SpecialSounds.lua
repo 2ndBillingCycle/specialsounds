@@ -128,7 +128,7 @@ hexchat.command = function (str) print("hexchat.command:\n" .. str) end
 hexchat.hook_command = function (a, b, c) end
 hexchat.hook_print = function (str, func) return function () end end
 --]]
-local version = "5"
+local version = "6"
 
 local command_name = "SSOUND"
 local settings_prefix = command_name .. "_"
