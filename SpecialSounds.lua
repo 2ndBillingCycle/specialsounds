@@ -48,11 +48,13 @@ Run all through and in order, they should delete all the settings they add
 /SSOUND /show server #channel
 /SSOUND /show server
 /SSOUND /show #channel
+/SSOUND /show (match)
 /SSOUND /show 
 /SSOUND /delete server #channel 2
 /SSOUND /delete server #channel 1
 /SSOUND /delete server 1
 /SSOUND /delete #channel 1
+/SSOUND /delete (match) 1
 /SSOUND /delete 1
 
 
@@ -156,8 +158,18 @@ end
 
 -- Currently, no fancy printing is done
 -- In the future, these could be set to make a private message, or something
-local function print_error (message) print(message .. "\n\n") end
-local function print_message (message) print(message .. "\n\n") end
+local function print_error (message)
+  if type(message) ~= "string" then
+    error("Bad string for print_error")
+  end
+  print(message .. "\n\n")
+end
+local function print_message (message)
+  if type(message) ~= "string" then
+    error("Bad string for print_message")
+  end
+  print(message .. "\n\n")
+end
 
 ---[[ Debug
 local function printvars (message, tbl)
@@ -971,7 +983,26 @@ end
 -- Currently no validity checking, but these could be used to check if a sound file exists, or if Lua can parse a pattern
 local function is_valid_server  (server)  return true end
 local function is_valid_channel (channel) return true end
-local function is_valid_sound   (sound)   return true end
+local function is_valid_sound (sound)
+  if type(sound) ~= "string" then
+    print_error(("Not a filename: %s"):format(tostring(sound)))
+    return false
+  end
+
+  local file, file_error = io.open(sound, "rb")
+  if file == nil then
+    print_error(file_error)
+    return false
+  elseif not file:read(0) then
+    print_error(("Empty file: %s"):format(sound))
+    return false
+  end
+
+  print_message(("Testing sound file: %s"):format(sound))
+  print(sound:escape_quotes())
+  print(hexchat.command("splay " .. sound:escape_quotes()))
+  return true
+end
 local function is_valid_match   (match)   return true end
 
 local function parse (str)
