@@ -26,7 +26,7 @@
      - - watching for the Tab key, to autofill actions, server names, channels, etc
      - Sound file validation                                                        ✗
      - - File exists
-     - - /SPLAY it so HexChat errors on bad files
+     - - Write a custom WAV parser                                                  ✗
      - /link                                                                        ✗
      - - Detect if not installed in plugins folder
      - - Suggest to /ssound /link to link from where it is into the plugins folder   
@@ -998,8 +998,11 @@ local function is_valid_sound (sound)
     return false
   end
 
-  print_message(("Testing sound file: %s"):format(sound))
-  print(sound:escape_quotes())
+  print_message(([[
+ Testing sound file: %s
+ If nothing is heard, try the following command to test if HexChat can play the file:
+ /SPLAY %s]]):format(sound, sound:escape_quotes()))
+
   print(hexchat.command("splay " .. sound:escape_quotes()))
   return true
 end
@@ -1078,16 +1081,12 @@ Parser error: %s
 
   function help_action ()
     print_message([[
-SHORT DESCRIPTION
-
-Plays a specified sound when an incoming Channel Message matches a configurable pattern.
-
 DESCRIPTION
 
-This command helps configure this plugin so that when a message is received that matches a pattern
-in a specific server and/or channel, a sound is played using the HexChat /SPLAY command.
+This command helps configure this plugin so that when a message is received that matches a pattern in a specific server and/or channel, a sound is played using the HexChat /SPLAY command.
 
 The command syntax follows this format:
+
 /SSOUND [server name] #[channel name] sound [sound file] match [pattern]
 
 If any of [server name], #[channel name], [sound file], or [pattern] have spaces, they must be wrapped in parenthesis.
@@ -1096,7 +1095,7 @@ Note that the channel name will have the # on the outside of the parenthesis.
 
 If something that has parenthesis in it needs to be wrapped in parenthesis, the internal parenthesis need to have % added before each ( and ).
 
-If [server name] or #[channel name] are left out, they'll be filled in using the server and channel the command is typed into.
+If [server name] or [channel name] are left out, they'll be filled in using the server and channel the command is typed into.
 
 Because of this, if a server is named "match" or "sound", it must be wrapped in parenthesis when typed in a command. Because channel names
 always start with a # they are exempt from this rule:
@@ -1716,7 +1715,8 @@ local function setup ()
   -- Set the function to be called when the command is invoked, and the help text
   hook_objects[#hook_objects + 1] = hexchat.hook_command(command_name, hook_command,
     "Usage: SSOUND [server] #[channel] sound [sound file] match [pattern], Plays a sound when a Channel Message matches a pattern"
-)
+  )
+
 end
 
 setup()
