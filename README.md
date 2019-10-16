@@ -144,6 +144,20 @@ If `Beep` or `Channel Message` are configured with a sound, and this plugin matc
 
 For best results, there should be no conflicts between the events HexChat has been configured to `Beep` for, and the messages this plugin is configured to match.
 
+## Settings not synced across multiple HexChat clients
+
+If HexChat is started more than once, and this plugin is loaded in each instance, settings set in any HexChat window are saved, but those changes aren't picked up by the other clients.
+
+Reload the plugin to update thaat window:
+
+```
+/lua reload specialsounds.lua
+```
+
+Using a different file name if it's not installed to HexChat's `config/addons/` folder.
+
+A better solution is to start HexChat once, and pop out the different channels and servers into different windows.
+
 ## Possible bugs in this plugin
 
 If I've mistyped something in this plugin, any of the following could happen:

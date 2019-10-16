@@ -34,18 +34,20 @@
      - - on/off treat server, channel, match as patterns or not                      
 
 
-The two big things I want to improve:
+The are a few things I want to improve:
 
- - Delete also treats the server anc hannel as patterns, and matches the number
+ - Delete also treats the server and channel as patterns, and matches the number    ✓
    based on the order /show would print them out in
- - - Show needs to add a number
- - Parenthesis should only have to be escaped once for the lexer, and that same
+ - - Show needs to add a number                                                     ✓
+ - Parenthesis should only have to be escaped once for the lexer, and that same     ✓
    escaping should work for the pattern special character escaping as well, so that
    % doesn't need to be doubled up to escape parenthesis.
+ - The message for invalid sound files is only printed once, but it's still         ✗
+   validated every time. Maybe a cache on is_valid_sound()
 
 All of these should /parse, and should not need the /action
 Run all through and in order, they should delete all the settings they add
-/SSOUND /add server #channel sound H:\sound.wav match (match pattern)
+/SSOUND /add server #channel sound H:\sound.wav match (matc%(h pattern)
 /SSOUND /add server #channel sound H:\sound.wav
 /SSOUND /add server #channel match pattern
 /SSOUND /add server match pattern
@@ -71,7 +73,7 @@ Run all through and in order, they should delete all the settings they add
 ---[[
 hexchat.register(
   "SpecialSounds",
-  "5",
+  "6",
   "Set special sound to play on message"
 )
 --]]
@@ -104,7 +106,7 @@ hexchat.command = function (str) print("hexchat.command:\n" .. str) end
 hexchat.hook_command = function (a, b, c) end
 hexchat.hook_print = function (str, func) return function () end end
 --]]
-local version = "6"
+local version = "7"
 
 local command_name = "SSOUND"
 local settings_prefix = command_name .. "_"
@@ -397,7 +399,6 @@ local function strip_parenthesis_group (group_string)
     return group_string
   end
   local group_string = group_string:sub(2, -2) -- Strip wrapping parenthesis
-  group_string = group_string:gsub("%%([()])", "%1") -- Remove escaping % from ( and )
   return group_string
 end
 
@@ -408,13 +409,12 @@ local function unstrip_parenthesis_group (group_string)
   end
   -- If the string has spaces in it, or if it's literally "match" or "sound", then wrap and escape it
   if group_string:match("%s") or group_string:match("^sound$") or group_string:match("^match$") then
-    group_string = group_string:gsub("([()])", "%%%1")
     group_string = "(" .. group_string .. ")"
   end
   return group_string
 end
 
-local function print_settings (server, channel, sound, match)
+local function print_settings (server, channel, sound, match, number)
   if type(server) ~= "string" or server == "" then
     server = "()"
   end
@@ -427,17 +427,25 @@ local function print_settings (server, channel, sound, match)
   if type(match) ~= "string" or match == "" then
     match = "()"
   end
+  if type(number) ~= "number" then
+    number = nil
+  end
 
   local str = ([[
 Server:  %s
 Channel: #%s
 Sound:   %s
 Match:   %s]]):format(
+
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   unstrip_parenthesis_group(sound),
   unstrip_parenthesis_group(match)
 )
+  
+  if number then
+    str = str .. ("\nNumber:  %s"):format( tostring(number) )
+  end
 
   print_message(str)
 end
@@ -787,7 +795,7 @@ local function store_settings (server, channel, sound, match)
         matched = true
         current_tables[#current_tables + 1] = {sound=sound, match=curr_match}
         print_message(([[
-Overwriting settings:
+Overwriting settings with:
 Server: %s
 Channel: #%s
 Sound: %s
@@ -800,7 +808,7 @@ Match: %s]]):format(
         matched = true
         current_tables[#current_tables + 1] = {sound=curr_sound, match=match}
         print_message(([[
-Overwriting settings:
+Overwriting settings with:
 Server: %s
 Channel: #%s
 Sound: %s
@@ -816,7 +824,8 @@ Match: %s]]):format(
   end
   
   -- If nothing matches, add an entry
-  if not matched then -- Because of the local sound = sound or "", sound and match will always be strings
+  if not matched then -- Because of the local sound = sound or "", sound and match will always be strings,
+                      -- so no need to ttype check
     current_tables[#current_tables + 1] = {sound=sound, match=match}
   end
   local settings_value = serialize_sound_match(current_tables)
@@ -827,6 +836,9 @@ Match: %s]]):format(
   settings[settings_key] = settings_value
   hexchat.pluginprefs[settings_key] = settings_value
 
+  if matched then
+    return "overwritten"
+  end
   return true
 end
 
@@ -850,7 +862,9 @@ local function set_settings (server, channel, sound, match)
     return false
   end
 
-  print_settings(server, channel, sound, match)
+  if exit_value ~= "overwritten" then
+    print_settings(server, channel, sound, match)
+  end
   return true
 end
 
@@ -865,6 +879,7 @@ local function get_settings (server, channel)
     ))
   end
 
+  local index = 1
   for _server, _channel, sound, match in search_settings(server, channel) do
     if type(server) ~= "string" or type(channel) ~= "string" or
        type(sound)  ~= "string" or type(match)   ~= "string"    then
@@ -872,7 +887,8 @@ local function get_settings (server, channel)
       return false
     end
 
-    print_settings(_server, _channel, sound, match)
+    print_settings(_server, _channel, sound, match, index)
+    index = index + 1
   end
   return true
 end
@@ -883,12 +899,7 @@ local function delete_setting (server, channel, number)
     return false
   end
 
-  local number_of_settings = 0
-  for _, _ in retrieve_settings(server, channel) do
-    number_of_settings = number_of_settings + 1
-  end
-  if number_of_settings < number then
-    print_message(([[
+  local error_message = ([[
 No settings found matching:
 Server:  %s
 Channel: #%s
@@ -896,33 +907,65 @@ Number:  %s]]):format(
   unstrip_parenthesis_group(server),
   unstrip_parenthesis_group(channel),
   tostring(number)
-))
+  )
+
+  local index = 1
+  local matched = false
+  local matching_server
+  local matching_channel
+  local matching_sound
+  local matching_match
+  for _server, _channel, sound, match in search_settings(server, channel) do
+    if type(_server) == "string" and
+       type(_channel) == "string" and
+       type(sound) == "string" and
+       type(match) == "string" and
+       index == number then
+      matching_server = _server
+      matching_channel = _channel
+      matching_sound = sound
+      matching_match = match
+      matched = true
+    end
+    index = index + 1
+  end
+
+  if not matched then
+    print_message(error_message)
     return false
   end
 
   local new_sound_match_pairs = {}
-  for sound, match in retrieve_settings(server, channel) do
-    if #new_sound_match_pairs + 1 == number then
-      -- If the item to be copied is in the same place as the item to be deleted,
+  matched = false
+  for sound, match in retrieve_settings(matching_server, matching_channel) do
+    if sound == matching_sound and match == matching_match and not matched then
+      matched = true
+      -- If the item to be copied has all the same properties as the item to be deleted,
       -- do nothing, so the item is never added, thereby deleting it
+      -- Only do this once, though
       if settings.debug_on then
         print_message(([[
 Deleting setting:
 Server:  %s
 Channel: #%s
-Number:  %s
 Sound:   %s
-Match:   %s]]):format(
-  unstrip_parenthesis_group(server),
-  unstrip_parenthesis_group(channel),
-  tostring(number),
+Match:   %s
+Number:  %s]]):format(
+  unstrip_parenthesis_group(matching_server),
+  unstrip_parenthesis_group(matching_channel),
   unstrip_parenthesis_group(sound),
-  unstrip_parenthesis_group(match)
+  unstrip_parenthesis_group(match),
+  tostring(number)
 ))
       end
     else
       new_sound_match_pairs[#new_sound_match_pairs + 1] = {sound=sound, match=match}
     end
+  end
+
+  if not matched then
+    print_message(error_message)
+    return false
   end
   
   -- If there are any items left after deleting, serialize them into a proper string
@@ -933,7 +976,7 @@ Match:   %s]]):format(
     if not new_settings_value then return new_settings_value end
   end
   
-  local settings_key = make_settings_key(server, channel)
+  local settings_key = make_settings_key(matching_server, matching_channel)
   if not settings_key then return settings_key end
 
   settings[settings_key] = new_settings_value
@@ -956,7 +999,7 @@ Token %s value:
   return true
 end
 
--- Currently no validity checking, but these could be used to check if a sound file exists, or if Lua can parse a pattern
+-- Currently hardly any validity checking, but these could be used to check if a sound file exists, or if Lua can parse a pattern
 local function is_valid_server  (server)  return true end
 local function is_valid_channel (channel) return true end
 local function is_valid_sound (sound)
@@ -974,10 +1017,12 @@ local function is_valid_sound (sound)
     return false
   end
 
-  print_message(([[
+  if settings.debug_on then
+    print_message(([[
  Testing sound file: %s
  If nothing is heard, try the following command to test if HexChat can play the file:
  /SPLAY %s]]):format(sound, sound:escape_quotes()))
+  end
 
   print(hexchat.command("splay " .. sound:escape_quotes()))
   return true
@@ -1512,7 +1557,9 @@ Channel: #%s]]):format(
         print_error("Cannot get name of current channel\nMay have to specify server and channel name")
         return false
       end
-      channel = channel:sub(2) -- Drop # from channel name
+      if channel:sub(1,1) == '#' then
+        channel = channel:sub(2) -- Drop # from channel name
+      end
     end
     return true
   end
