@@ -33,6 +33,16 @@
      - /patterns                                                                    ✗
      - - on/off treat server, channel, match as patterns or not                      
 
+
+The two big things I want to improve:
+
+ - Delete also treats the server anc hannel as patterns, and matches the number
+   based on the order /show would print them out in
+ - - Show needs to add a number
+ - Parenthesis should only have to be escaped once for the lexer, and that same
+   escaping should work for the pattern special character escaping as well, so that
+   % doesn't need to be doubled up to escape parenthesis.
+
 All of these should /parse, and should not need the /action
 Run all through and in order, they should delete all the settings they add
 /SSOUND /add server #channel sound H:\sound.wav match (match pattern)
@@ -56,40 +66,6 @@ Run all through and in order, they should delete all the settings they add
 /SSOUND /delete #channel 1
 /SSOUND /delete (match) 1
 /SSOUND /delete 1
-
-
-The big questions were what to do with
-
-/SSOUND match
-
-and
-
-/SSOUND match match
-
-and
-
-/SSOUND match match match
-
-The first could use "match" as the server name, but then the second would error, saying it doesn't know what the
-second "match" is supposed to be.
-
-If it gives an error saying it's expecting a pattern, then the second will work fine, autofilling for the missing server name.
-
-The third command, then, should treat the first "match" as the server name, but this would be difficult to implement, as the
-parser would have to look ahead to see if it can disambiguate what the current token should mean.
-
-Something like
-
-/SSOUND match match sound sound
-
-Would be tough to disambiguate: did they mean to elide the server name, or is the server named "match", the pattern is "sound",
-and they forgot to specify the sound file.
-
-I could add assumptions about what people are likely to want, but that would get out of hand, quickly.
-
-So the only assumption I'll make is that it's unlikely people will have a server with "sound" or "match" in the hostname.
-
-For now, "match" and "sound" are reserved keywords.
 --]]
 
 ---[[
