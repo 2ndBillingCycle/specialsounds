@@ -11,10 +11,10 @@
      - /show_or_add_or_delete                                                       ✓
      - - Autofills with current context
      - - /show                                                                      ✓
-     - - - /showall                                                                 ✗
+     - - - /showall                                                                 ✓
      - - /add                                                                       ✓
      - /delete                                                                      ✓
-     - /deleteall                                                                   ✗
+     - /deleteall                                                                   ✓
      - /lex                                                                         ✓
      - - Prints tokens
      - /parse                                                                       ✓
@@ -106,7 +106,7 @@ hexchat.command = function (str) print("hexchat.command:\n" .. str) end
 hexchat.hook_command = function (a, b, c) end
 hexchat.hook_print = function (str, func) return function () end end
 --]]
-local version = "7"
+local version = "8"
 
 local command_name = "SSOUND"
 local settings_prefix = command_name .. "_"
@@ -985,6 +985,26 @@ Number:  %s]]):format(
   return true
 end
 
+local function delete_all_settings ()
+  local settings_keys = {}
+  for key, val in pairs(hexchat.pluginprefs) do
+    if key:match(settings_prefix .. "%[%[.-%]%]%[%[.-%]%]") and val:match("sound = %[%[.-%]%]\nmatch = %[%[.-%]%]") then
+      settings_keys[#settings_keys + 1] = key
+    end
+  end
+  if settings.debug_on and #settings_keys > 0 then
+    print_message("Deleting all settings")
+  elseif #settings_keys < 1 then
+    print_message("No settings to delete")
+    return true
+  end
+  for _, item in ipairs(settings_keys) do
+    settings[item] = nil
+    hexchat.pluginprefs[item] = nil
+  end
+  return true
+end
+
 local function print_tokens (tokens)
   if type(tokens) ~= "table" then
     return false
@@ -1099,6 +1119,7 @@ Parser error: %s
 
   local sinner_parse, how_or_add_or_delete, show_action, add_action, delete_action, parse_sound, parse_match, parse_server_channel
   local autofill_server_channel, lex_action, debug_action, echo_action, parse_action, add_action, show_action, help_action
+  local deleteall_action, showall_action
 
   function help_action ()
     print_message([[
@@ -1355,6 +1376,22 @@ Channel: %s]]):format( tostring(server) , tostring(channel) ))
     end
   end
 
+  function deleteall_action ()
+    if position > #tokens then
+      if parse_setting then
+        parse_setting = false
+        settings.debug_on = hexchat.pluginprefs.debug_on
+        print_message("Parse: Deleteing all settings")
+        return true
+      else
+        return delete_all_settings()
+      end
+    else
+      parser_error("/deleteall takes no arguments; unexpected text", position)
+      return false
+    end
+  end
+
   function parse_sound ()
     if position > #tokens then
       parser_error("Expected sound file", position)
@@ -1495,6 +1532,24 @@ Channel: #%s]]):format(
     end
   end
 
+  function showall_action ()
+    if position > #tokens then
+      if parse_setting then
+        parse_setting = false
+        settings.debug_on = hexchat.pluginprefs.debug_on
+        print_message("Parse: Showing all settings")
+        return true
+      else
+        server = ".*"
+        channel = ".*"
+        return show_action()
+      end
+    else
+      parser_error("/showall takes no arguments; unexpected text", position)
+      return false
+    end
+  end
+
   function parse_server_channel ()
     if position > #tokens or #server > 0 or #channel > 0 then
       local token = tokens[position]
@@ -1605,8 +1660,10 @@ Channel: #%s]]):format(
   action_table["echo"] = echo_action
   action_table["parse"] = parse_action
   action_table["delete"] = delete_action
+  action_table["deleteall"] = deleteall_action
   action_table["add"] = add_action
   action_table["show"] = show_action
+  action_table["showall"] = showall_action
   action_table["show_or_add_or_delete"] = show_or_add_or_delete
 
   local function default_action ()
