@@ -126,6 +126,38 @@ To list all the settings configured, use:
 /ssound (.*) #(.*)
 ```
 
+The `Number: _` line in each group of settings can be used to delete that setting. Use the same command, and add the number at the end:
+
+```
+/ssound test #test sound H:\test.wav match test
+ 
+Set settings for: test #test
+
+Server:  test
+Channel: #test
+Sound:   H:\test.wav
+Match:   test
+
+/ssound test #test
+
+Get settings for: test #test
+
+Server:  test
+Channel: #test
+Sound:   H:\test.wav
+Match:   test
+Number:  1
+
+/ssound test #test 1
+
+Deleting setting:
+Server:  test
+Channel: #test
+Sound:   H:\test.wav
+Match:   test
+Number:  1
+```
+
 # Limitations
 
 ## Sound file isn't validated
