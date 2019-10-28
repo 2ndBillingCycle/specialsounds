@@ -59,7 +59,7 @@ To match something with spaces, it must be wrapped in parenthesis:
 (a phrase has spaces)
 ```
 
-This applies the same for `[server name]` and `#[channel name]` as well.
+This also applies to the `[server name]` and `#[channel name]`.
 
 Note that the `#` for a `[channel name]` *must* be on the outside of the parenthesis:
 
@@ -77,7 +77,7 @@ Lua patterns treat `%` `(` `)` `.` `[` `]` `*` `+` `-` `?` all as special charac
 
 To have Lua treat any of these as regular characters, put a `%` before them.
 
-As an example, to match the text `:-) tehee (-:`, the whole thing first needs to be wrapped in parenthesis, and the `(`, `)`, and `-` inside need to be escaped with a `%`:
+As an example, to match the text `:-) tehee (-:`, it first needs to be wrapped in parentheses, and the `(`, `)`, and `-` that are part of the original text need to be escaped with a `%`:
 
 ```
 (:%-%) tehee %(%-:)
@@ -101,7 +101,7 @@ If the command is typed into a channel, either the `[server name]`, the `[channe
 /ssound sound H:\rain.wav match (pitter patter)
 ```
 
-This is convenient, because the plugin only sees the [hostname][] (Server URL) of the specific server that's hosting the IRC channel, and not what might show up in the HexChat Network List.
+This is convenient, because the plugin only sees the [hostname][] (See [Hostnames](./README.md#Hostnames) for more information) of the specific server that's hosting the IRC channel, and not what might show up in the HexChat Network List.
 
 As a consequence of this feature, if a `[server name]` needs to be configured as `sound` or `match`, or if it needs to begin with a `/`, it must be wrapped in parenthesis. The following will not work:
 
@@ -133,7 +133,7 @@ The `Number:` line in each group of settings can be used to delete that setting.
 
 ```
 /ssound test #test sound H:\test.wav match test
- 
+
 Set settings for: test #test
 
 Server:  test
@@ -207,6 +207,12 @@ Things that cannot happen:
  - Configure the rest of HexChat
 
 This plugin does not have that functionality, and so any bugs it may have can't accidentally make those things happen.
+
+# Hostnames
+
+A server *hostname*, such as `irc.tdstoragebay.com`, is the name that a particular server can be reached at. Hostnames are like the main part of a URL, for example, `https://google.com/login` includes the hostname of `google.com` as the server you want to connect to (in this case, for normal web browsing).
+
+HexChat very rarely shows hostnames, instead preferring user-assigned labels, but the server hostname is critical to the inner workings of HexChat and this plugin.
 
 # Motivation
 
