@@ -2,7 +2,7 @@
 
 This is a plugin for [HexChat][].
 
-It provides an `/ssound` command to use to configure the plugin to play specific sounds when specific messages are received.
+It provides the `/ssound` command to play specific sounds when specific messages are received.
 
 # Installation
 
@@ -38,15 +38,18 @@ For example:
 /ssound fuelrats #fuelrats sound H:\signal.wav match SIGNAL
 ```
 
-Configures the plugin to watch the `#fuelrats` channel on the server `fuelrats`, and will play the file `H:\signal.wav` when a message  has the word `SIGNAL` in it.
+Configures the plugin to watch the `#fuelrats` channel on the server `fuelrats`, and will play the file `H:\signal.wav` when a message has the word `SIGNAL` in it.
 
-HexChat has the builtin command `/splay [file]` that plays any [WAV file][wav].
+This plugin takes advantage of the built-in HexChat `/splay [file]` command, that can play any [WAV file][wav], by triggering that command with the given sound file every time a message with `[pattern]` is received.
 
-This plugin simply uses that command to play to play the specified sound file every time the `[pattern]` matches a message.
+The plugin responds to HexChat `Channel Messages`, a type of [HexChat Text Event][hexchat-text-event], and are how HexChat shows messages coming from other members participating in a channel.
 
-The messages are HexChat `Channel Messages`, a type of [HexChat Text Event][hexchat-text-event], and are how HexChat shows messages coming from other members participating in a channel.
+This means that the following will not trigger a sound:
 
-This means that messages you send, private messages, messages sent directly by the server, or messages outside a channel, all will not trigger a sound.
+* Messages you send
+* Private messages
+* Messages sent directly by the server (not other people)
+* Messages outside of a channel
 
 Please [open an issue][issue] if you want any of these to play unique sounds.
 
@@ -56,23 +59,23 @@ To match something with spaces, it must be wrapped in parenthesis:
 (a phrase has spaces)
 ```
 
-This goes for the `[server name]` and `#[channel name]` as well, as those both are treated as patterns, too.
+This applies the same for `[server name]` and `#[channel name]` as well.
 
-Note that the `#` for a `[channel name]` will be on the outside of the parenthesis:
+Note that the `#` for a `[channel name]` *must* be on the outside of the parenthesis:
 
 ```
 #(channel name)
 ```
 
-This is in part because the `[server name]`, `[channel name]`, and `[pattern]` are all (usually) treated as [Lua patterns][lua-patterns].
+This is because the `[server name]`, `[channel name]`, and `[pattern]` are all (usually) treated as [Lua patterns][lua-patterns].
 
-This means that, a `[pattern]` of `word` will match any message with `word` in it, like `Oh my word, that's awesome!`.
+As an example, a `[pattern]` of `word` will match any message with `word` in it, like `Oh my word, that's awesome!`.
 
 This also has a few consequences:
 
-Lua patterns treat `%` `(` `)` `.` `[` `]` `*` `+` `-` `?` all as special characters that do different things. Additionally, `^` is treated as special when it's at the beginning of a `[pattern`], and `$` when it's at the end.
+Lua patterns treat `%` `(` `)` `.` `[` `]` `*` `+` `-` `?` all as special characters that do different things. Additionally, `^` is treated as special when it's at the beginning of a `[pattern]`, and `$` when it's at the end.
 
-To have Lua treat them as regular characters, put a `%` before them.
+To have Lua treat any of these as regular characters, put a `%` before them.
 
 As an example, to match the text `:-) tehee (-:`, the whole thing first needs to be wrapped in parenthesis, and the `(`, `)`, and `-` inside need to be escaped with a `%`:
 
@@ -82,7 +85,7 @@ As an example, to match the text `:-) tehee (-:`, the whole thing first needs to
 
 This can be painful, but hopefully doesn't come up much. If it does, and you want an option to treat the text as just text, and only have to worry about spaces, `(`, and `)`, please [open an issue][issue].
 
-Also, Lua patterns are case sensitive, so the `[pattern]` `no` will match neither `NOOOOO` nor `No, stop`, but will match `That's enough!`.
+Also, Lua patterns are case sensitive, so the `[pattern]` of `no` will *not* match `NOOOOO` or `No, stop`, but *will* match `That's enough!`.
 
 Lastly, the sound file must be able to be played with HexChat's builtin `/splay` command. See [Limitations](./README.md#Limitations).
 
@@ -98,7 +101,7 @@ If the command is typed into a channel, either the `[server name]`, the `[channe
 /ssound sound H:\rain.wav match (pitter patter)
 ```
 
-This is convenient, because the plugin only sees the [hostname][] (like a URL) of the specific server that's hosting the IRC channel, and not what might show up in the HexChat Network List.
+This is convenient, because the plugin only sees the [hostname][] (Server URL) of the specific server that's hosting the IRC channel, and not what might show up in the HexChat Network List.
 
 As a consequence of this feature, if a `[server name]` needs to be configured as `sound` or `match`, or if it needs to begin with a `/`, it must be wrapped in parenthesis. The following will not work:
 
@@ -126,7 +129,7 @@ To list all the settings configured, use:
 /ssound (.*) #(.*)
 ```
 
-The `Number: _` line in each group of settings can be used to delete that setting. Use the same command, and add the number at the end:
+The `Number:` line in each group of settings can be used to delete that setting. Use the same command, and add the number at the end:
 
 ```
 /ssound test #test sound H:\test.wav match test
@@ -203,7 +206,7 @@ Things that cannot happen:
  - Send messages as you
  - Configure the rest of HexChat
 
-Plugins can do those things, but this plugin does not have that functionality, and so any bugs it may have can't accidentally make those things happen.
+This plugin does not have that functionality, and so any bugs it may have can't accidentally make those things happen.
 
 # Motivation
 
