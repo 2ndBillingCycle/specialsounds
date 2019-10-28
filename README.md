@@ -210,9 +210,22 @@ This plugin does not have that functionality, and so any bugs it may have can't 
 
 # Hostnames
 
-A server *hostname*, such as `irc.tdstoragebay.com`, is the name that a particular server can be reached at. Hostnames are like the main part of a URL, for example, `https://google.com/login` includes the hostname of `google.com` as the server you want to connect to (in this case, for normal web browsing).
+A server *hostname*, such as `irc.example.com`, is the name that a particular server can be reached at.
+Hostnames are like the main part of a URL, for example, `https://example.com/login` includes the hostname of `example.com` as the server you want to connect to (in this case, for normal web browsing).
 
 HexChat very rarely shows hostnames, instead preferring user-assigned labels, but the server hostname is critical to the inner workings of HexChat and this plugin.
+
+Note that once connected to a server, it will report it's own hostname, and *that* is what HexChat uses.
+For most purposes, the name you connect to and the name reported should be pretty close to identical, but they can differ.
+If they do, it's the *server reported* name that is acted upon by HexChat.
+
+As a concrete example:
+
+Say you want to connect to `irc.example.com`.
+There are actually two servers in `irc.example.com`, one is `na.irc.example.com` and the other is `eu.irc.example.com`.
+
+Despite saying "Connect to `irc.example.com`," This plugin will report for either `na.irc.example.com` or `eu.irc.example.com`, depending on which one actually connected.
+This brings up the possibility of a sound configured in one not playing in the other, which can be solved by using patterns to match the common portion (`irc.example.com`) of the server hostname, instead of matching exactly.
 
 # Motivation
 
