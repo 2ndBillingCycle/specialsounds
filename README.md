@@ -38,7 +38,7 @@ The plugin is written in [Lua][] so that it can be used with the normal installa
 /ssound [server name] #[channel name] sound <sound file> match <pattern>
 ```
 
-Where any `[`_`text between braces`_`]` is optional, and `<`_`text between angle brackets`_`>` is required. The `[` `]` `<` `>` are left out when entering the command.
+Where any `[`_`text between braces`_`]` is optional, and `<`_`text between angle brackets`_`>` is to be replaced with an actual value. The `[` `]` `<` `>` are left out when entering the command.
 
 For example:
 
@@ -48,7 +48,7 @@ For example:
 
 Configures the plugin to watch the `#fuelrats` channel on the server `fuelrats`, and will play the file `H:\signal.wav` when a message has the word `SIGNAL` in it.
 
-The word `SIGNAL` can appear anywhere in any message from that channel, and each time a message is matched, the sound file will be played.
+The phrase `SIGNAL` can appear anywhere in any message from that channel (even in the middle of words), and each time a message is matched, the sound file will be played.
 
 If the `[server name]`, `#[channel name]`, `<sound file>`, or `<pattern>` have spaces, they must be wrapped in parentheses:
 
@@ -84,15 +84,17 @@ As a consequence of this feature, if a `[server name]` needs to be configured as
 /ssound match #channel sound (H:\sound wave.wav) match (hearing things)
 ```
 
+And the following error message will result:
+
 ```
 Parser error: Unexpected text
-/SSOUND match #channel sound (H:\sound wave.wav) match (hearing things) 
+/SSOUND match #channel sound (H:\sound wave.wav) match (hearing things)
                ^
 
 Sorry, could not understand command
 ```
 
-But the following will:
+But the following will work:
 
 ```
 /ssound (match) #channel sound (H:\sound wave.wav) match (hearing things)
@@ -119,7 +121,7 @@ This can be used to list all the settings configured for every server and channe
 /ssound (.*) #(.*)
 ```
 
-Alternatively, the autofilling feature can be used to list all the `sound` and `match` pairs configured for the current server and channel:
+Alternatively, the auto-filling feature can be used to list all the `sound` and `match` pairs configured for the current server and channel:
 
 ```
 /ssound
@@ -214,7 +216,7 @@ This means that the following will not trigger a sound:
 
 Please [open an issue][issue] if you want any other text events to play unique sounds.
 
-## WAV is the only sound fileformat playable on Windows
+## WAV is the only sound file format playable on Windows
 
 HexChat officially supports Linux and Windows, and uses different mechanisms to play sound files on each platform.
 
@@ -222,9 +224,6 @@ On Windows, HexChat calls [`PlaySound`][PlaySound], which can process some kinds
 
 [Audacity][] can be used to [import audio][import-audio], and then [export the audio][export-audio] in one of the following formats understood by [`PlaySound`][PlaySound]:
 
-* Signed 16-bit PCM
-* Signed 16-bit PCM
-* Signed 16-bit PCM
 * Signed 16-bit PCM
 * 32-bit float
 * μ-Law
@@ -236,7 +235,7 @@ On Windows, HexChat calls [`PlaySound`][PlaySound], which can process some kinds
 
 [IMA ADPCM][ima-adpcm] produces the smallest file size with acceptable audio quality for speech.
 
-On Linux, HexChat uses [libcanberra][], which can use ALSA, PulseAudio, OSS and GStreamer to play sound files. Most formats should be playeable.
+On Linux, HexChat uses [libcanberra][], which can use ALSA, PulseAudio, OSS and GStreamer to play sound files. Most formats should be playable.
 
 ## Sound file isn't validated
 
@@ -288,13 +287,13 @@ If a `Channel message` is received that reads `ATTENTION: All staff report to Sa
 
 If HexChat is started more than once, and this plugin is loaded in each instance, settings set in any HexChat window are saved, but those changes aren't picked up by the other clients.
 
-Reload the plugin to update thaat window:
+Reload the plugin to update that window:
 
 ```
 /lua reload specialsounds.lua
 ```
 
-Using a different file name if it's not installed to HexChat's `config/addons/` folder.
+Use a different file name if it's not installed to HexChat's `config/addons/` folder.
 
 A better solution is to start HexChat once, and pop out the different channels and servers into different windows.
 
