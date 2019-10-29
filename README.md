@@ -177,7 +177,7 @@ To stop the plugin without closing HexChat, unload the plugin:
 /lua unload SpecialSounds.lua
 ```
 
-## [Lua patterns][lua-patterns]
+## [Lua Patterns][lua-patterns]
 
 The use of [Lua patterns][lua-patterns] has a few consequences:
 
@@ -195,7 +195,7 @@ This can be tedious, but hopefully doesn't come up much. If it does, and you wan
 
 Also, Lua patterns are case sensitive, so the `<pattern>` of `no` will *not* match `NOOOOO` or `No, stop`, but *will* match `That's enough!`.
 
-## Sound files
+## Sound Files
 
 To play the sound files, this plugin takes advantage of the built-in HexChat `/splay <soundfile>` command, triggering it with the given sound file every time a message with `<pattern>` is received.
 
@@ -203,7 +203,7 @@ HexChat supports [different sound file formats on different platforms](./REAMDE.
 
 # Limitations
 
-## Available message types
+## Available Message Types
 
 The only messages this plugin responds to are HexChat `Channel Messages` (a type of [HexChat Text Event][hexchat-text-event]) which are how HexChat shows messages coming from other members participating in a channel.
 
@@ -216,7 +216,7 @@ This means that the following will not trigger a sound:
 
 Please [open an issue][issue] if you want any other text events to play unique sounds.
 
-## WAV is the only sound file format playable on Windows
+## Only WAV Files Are Playable in Windows
 
 HexChat officially supports Linux and Windows, and uses different mechanisms to play sound files on each platform.
 
@@ -237,13 +237,13 @@ On Windows, HexChat calls [`PlaySound`][PlaySound], which can process some kinds
 
 On Linux, HexChat uses [libcanberra][], which can use ALSA, PulseAudio, OSS and GStreamer to play sound files. Most formats should be playable.
 
-## Sound file isn't validated
+## Sound File Format Is Not Validated
 
 The sound file isn't checked to make sure it's a file HexChat understands. If HexChat doesn't understand it, and a message is matched, nothing happens; no error, no sound.
 
 Test the sound file with HexChat's built in `/splay` command first to make sure HexChat can use it. `/help splay` describes how to use the command.
 
-## Sounds can't overlap
+## Sounds Cannot Overlap
 
 HexChat can highlight words (by default, your IRC nick), and can also emit the Text Event named `Beep`. These settings are under `Settings -> Preferences` and then `Chatting -> Alerts`:
 
@@ -283,7 +283,7 @@ Match:   meeting
 
 If a `Channel message` is received that reads `ATTENTION: All staff report to Sam's office for a brief meeting`, only `H:\attention.wav` is played.
 
-## Settings not synced across multiple HexChat clients
+## Settings Are Not Synced Across Multiple HexChat Clients
 
 If HexChat is started more than once, and this plugin is loaded in each instance, settings set in any HexChat window are saved, but those changes aren't picked up by the other clients.
 
@@ -297,7 +297,7 @@ Use a different file name if it's not installed to HexChat's `config/addons/` fo
 
 A better solution is to start HexChat once, and pop out the different channels and servers into different windows.
 
-## Possible bugs in this plugin
+## Possible Bugs
 
 If I've mistyped something in this plugin, any of the following could happen:
 
