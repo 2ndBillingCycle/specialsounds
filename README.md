@@ -22,7 +22,7 @@ The [HexChat documentation][hexchat-addons] has more instructions on installing 
 
 The command to load this plugin can be set as a `Connect command` for a server in HexChat's `Network List`:
 
-![Connect Command set fo an entry in Network List](https://i.imgur.com/sD1CvOw.png).
+![Connect Command set for an entry in Network List](https://i.imgur.com/sD1CvOw.png).
 
 This calls the command when connecting to the server, loading the plugin.
 
@@ -199,7 +199,7 @@ Also, Lua patterns are case sensitive, so the `<pattern>` of `no` will *not* mat
 
 To play the sound files, this plugin takes advantage of the built-in HexChat `/splay <soundfile>` command, triggering it with the given sound file every time a message with `<pattern>` is received.
 
-HexChat supports [different sound file formats on different platforms](./REAMDE.md#wav-is-the-only-sound-fileformat-playable-on-windows), so test out the sound file with `/splay` before using it in a configuration, to make sure it can be played.
+HexChat supports [different sound file formats on different platforms](./REAMDE.md#only-wav-files-are-playable-on-windows), so test out the sound file with `/splay` before using it in a configuration, to make sure it can be played.
 
 # Limitations
 
@@ -216,7 +216,7 @@ This means that the following will not trigger a sound:
 
 Please [open an issue][issue] if you want any other text events to play unique sounds.
 
-## Only WAV Files Are Playable in Windows
+## Only WAV Files Are Playable on Windows
 
 HexChat officially supports Linux and Windows, and uses different mechanisms to play sound files on each platform.
 
