@@ -225,6 +225,8 @@ On Windows, HexChat calls [`PlaySound`][PlaySound], which can process some kinds
 [Audacity][] can be used to [import audio][import-audio], and then [export the audio][export-audio] in one of the following formats understood by [`PlaySound`][PlaySound]:
 
 * Signed 16-bit PCM
+* Signed 24-bit PCM
+* Signed 32-bit PCM
 * 32-bit float
 * μ-Law
 * A-Law
