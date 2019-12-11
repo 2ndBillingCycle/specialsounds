@@ -1797,6 +1797,7 @@ local function setup ()
     "Usage: SSOUND [server] #[channel] sound [sound file] match [pattern], Plays a sound when a Channel Message matches a pattern"
   )
 
+  --local lgi = require "lgi"
 end
 
 setup()
