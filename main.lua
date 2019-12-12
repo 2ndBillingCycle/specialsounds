@@ -84,37 +84,8 @@ string.escape_quotes = function (str)
   return str
 end
 
----[==[ Debug
--- Mock hexchat
-if not hexchat then
-    hexchat = {}
-    hexchat.pluginprefs = {}
-    hexchat.EAT_HEXCHAT = true
-    hexchat.EAT_NONE = true
-    hexchat.get_info = function (str)
-      if str == "channel" then
-        return "#a"
-      else
-        return "a"
-      end
-    end
-    hexchat.get_context = function ()
-      return {
-        get_info = function (ctx, str)
-          if str == "channel" then
-            return "#a"
-          else
-            return "a"
-          end
-        end
-      }
-    end
-    hexchat.strip = function (str) return str end
-    hexchat.command = function (str) print("hexchat.command:\n" .. str) end
-    hexchat.hook_command = function (a, b, c) end
-    hexchat.hook_print = function (str, func) return function () end end
-end
 
+---[==[ Debug
 local function printvars (message, tbl)
   print(message)
   for key, var in pairs(tbl) do
@@ -136,7 +107,6 @@ local function print_hook_args (...)
   end
   if hexchat then return hexchat.EAT_HEXCHAT end
 end
-
 --]==]
 
 ---[[ Add HexChat's ./config/addons directory to package.path
@@ -782,10 +752,14 @@ local function is_valid_sound (sound)
   if file == nil then
     print_error(file_error)
     return false
+---[[ From PiL 2nd Ed, end of Section 21.1: read(0) acts as a way to test for empty files, as it
+   -- forces Lua to try to read nothing, and if there's nothing at all to read, it returnns nil,
+   -- but if there's something, it returns an empty string, which in Lua, is truthy
   elseif not file:read(0) then
     print_error(("Empty file: %s"):format(sound))
     return false
   end
+  assert(file:close())
 
   if settings.debug_on then
     print_message(([[

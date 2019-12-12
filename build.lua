@@ -35,9 +35,9 @@ It would need to replace the `return rock` at the end of every file with somethi
 
 ```lua
 for name,func in pairs(rock) do
-    if package.loaded[name] ~= nil then
-        error("Name collision")
-    end
+if package.loaded[name] ~= nil then
+error("Name collision")
+end
 end
 package.loaded["foo"] = rock
 ```
@@ -64,31 +64,88 @@ rock = nil
 Sounds dandy. Only thing to do is make sure the order is correct. I don't think this could be automated, except maybe in the filenaming (e.g. `00-lex.lua`, `00-parser.lua`, etc).
 
 This seems tedious, and I don't want to do that. I don't expect the functionality to grow so quickly that adding the filenames to a list manually to become tedious.
+
+Also, since Lua doesn't have a native understanding of directories, it'd be easier to have it build the final file as SpecialSounds.lua in the current directory.
 --]==]
 
 local rock = {}
 
-rock.build = function ()
-    local files = {
-        "header.lua", -- Check if we're running under HexChat, and register early to keep it happy
-        "lexer.lua",
-        "build.lua",
-        "test.lua",
-        "SpecialSounds.lua",
-    }
+local function print_error (message)
+  if type(message) ~= "string" then
+    error("Bad string for print_error")
+  end
+  print(message .. "\n\n")
+end
+local function print_message (message)
+  if type(message) ~= "string" then
+    error("Bad string for print_message")
+  end
+  print(message .. "\n\n")
+end
 
-    for i,files in ipairs(files) do
-        -- Check to make sure the file exists
-        -- On the first one, optionally bump the version
-        -- Load/compile the file to make sure there aren't any obvious errors like syntax errors
-        -- Chop off the last line
-        -- Append the necessary 2 package loading lines
-        -- Mush it into the pile
+
+rock.bumpver = function ()
+  -- If the global variable bumpver is not set, do nothing
+  if not bumpver then return nil end
+  local new_file = ""
+  local handle, err = io.open("header.lua", "r")
+  if not handle and err then
+    print_error(("Bad file: %s"):format(tostring(err)))
+  end
+  local file = handle:read("*all")
+  if not file then
+    print_error("Missing header.lua")
+  end
+  version = ""
+  while true do
+    local line = handle:read("*line")
+    if not line then break end
+    local ver = line:match("^rock\.version = \"([0-9]+)\"")
+    if ver and type(tonumber(ver)) == "number" then
+      ver = tostring(ver + 1)
+      line = ("rock.version = \"%s\""):format(ver)
     end
+    new_file = new_file..line
+  end
+  assert(handle:close())
+  local handle, err = io.open("header.lua", "w")
+  if not handle and err then
+    print_error(("Can't reopen: %s"):format(tostring(err)))
+  end
+  handle:write(new_file)
+  assert(handle:close())
+end
+  
 
-    -- Make directory ./build if it doesn't exist
-    -- Put the mushed file into ./build/SpecialSounds.lua
-    -- 🎈
+rock.run = function ()
+  local files = {
+    "header.lua", -- Check if we're running under HexChat, and register early to keep it happy
+    "lexer.lua",
+    "build.lua",
+    "test.lua",
+    "main.lua",
+  }
+
+  for i,name in ipairs(files) do
+    -- Check to make sure the file exists
+    local file, file_error = io.open(name, "rb")
+    if file == nil then
+      print_error(file_error)
+      return false
+    elseif not file:read(0) then
+      print_error(("Empty file: %s"):format(name))
+      return false
+    end
+    -- On the first one, optionally bump the version
+    -- Load/compile the file to make sure there aren't any obvious errors like syntax errors
+    -- Chop off the last line
+    -- Append the necessary 2 package loading lines
+    -- Mush it into the pile
+  end
+
+  -- Make directory ./build if it doesn't exist
+  -- Put the mushed file into ./build/SpecialSounds.lua
+  -- 🎈
 end
 
 return rock
