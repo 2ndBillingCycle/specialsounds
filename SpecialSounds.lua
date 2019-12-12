@@ -43,7 +43,6 @@ The are a few things I want to improve:
 
 --]]
 
-local version = "9"
 
 -- Currently, no fancy printing is done
 -- In the future, these could be set to make a private message, or something
@@ -83,15 +82,6 @@ string.escape_quotes = function (str)
     str = '"' .. str:gsub('"', '\\"') .. '"'
   end
   return str
-end
-
-if hexchat then
-    hexchat.register(
-      "SpecialSounds",
-      version,
-      "Set special sound to play on message"
-    )
-    settings.hexchat = true
 end
 
 ---[==[ Debug
@@ -149,6 +139,8 @@ end
 
 --]==]
 
+---[[ Add HexChat's ./config/addons directory to package.path
+package.path = ".\\config\\addons\\?.lua;" .. package.path
 local lexer = require "lexer"
 
 local function strip_parenthesis_group (group_string)
@@ -1507,11 +1499,12 @@ local function splay_on_matching_channel_message()
 end
 
 local function setup ()
+  local header = require "header"
   if not hexchat.pluginprefs.version then
-    hexchat.pluginprefs.version = version
-  elseif tonumber(hexchat.pluginprefs.version) > tonumber(version) then
+    hexchat.pluginprefs.version = header.version
+  elseif tonumber(hexchat.pluginprefs.version) > tonumber(header.version) then
     print_message("The stored settings may be in a newer format than this version of the plugin:")
-    print_message("Plugin version:   " .. tostring(version))
+    print_message("Plugin version:   " .. tostring(header.version))
     print_message("Settings version: " .. tostring(hexchat.pluginprefs.version))
   else
     -- No releases yet, so no need to support data migration
