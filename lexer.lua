@@ -1,6 +1,7 @@
 -- Neither this lexer nor parser are pretty. A very pretty one is at:
 -- https://github.com/stravant/LuaMinify/blob/master/ParseLua.lua
 local rock = {}
+local emit = require "emit"
 rock.lex = function (str)
 ---[[ This function is passed the command invocation as seen by HexChat,
    -- with the expectation that the command name is stripped:
@@ -66,25 +67,37 @@ rock.lex = function (str)
   local function unbalanced_parenthesis_error (group)
     local missing_paren = parenthesis_count > 0 and ")" or "("
     missing_paren = missing_paren:rep(math.abs( parenthesis_count ))
-    print_error(([[
+    print(([[
+parenthesis_group: %s
+command_name: %s
+str: %s]]):format(tostring(parenthesis_group), tostring(command_name), tostring(str)))
+    emit.err([[
 Unbalanced parenthesis: missing %s
 
 This is the group:
 %s
 
 The full command is:
-/%s %s]]):format(missing_paren, parenthesis_group, command_name, str)
+/%s %s]],
+      missing_paren,
+      parenthesis_group,
+      command_name,
+      str
     )
   end
 
   local function unexpected_character_error (char)
-    print_error(([[
+    emit.err([[
 Found unexpected character:
 %s
 
 Here:
 /%s %s
-%s]]):format(char, command_name, str, (" "):rep(position -1 + #command_name + 2) .. "^")
+%s]],
+      char,
+      command_name,
+      str,
+      (" "):rep(position -1 + #command_name + 2) .. "^"
     )
   end
 --]]

@@ -3,6 +3,7 @@ local rock = {}
 ---[==[ Mock hexchat table
 if not hexchat then
   hexchat = {}
+  hexchat.print = print
   hexchat.pluginprefs = {}
   hexchat.EAT_HEXCHAT = true
   hexchat.EAT_NONE = true
@@ -26,8 +27,8 @@ if not hexchat then
   end
   hexchat.strip = function (str) return str end
   hexchat.command = function (str) print("hexchat.command:\n" .. str) end
-  hexchat.hook_command = function (a, b, c) end
-  hexchat.hook_print = function (str, func) return function () end end
+  hexchat.hook_command = function (a, b, c) return {unhook = function () end} end
+  hexchat.hook_print = function (str, func) return {unhook = function () end} end
   hexchat.register = function (...) return end
 end
 --]==]

@@ -21,11 +21,11 @@ Mismatched parenthesis error
 --]]
 
 local rock = {}
+local lexer = require "lexer"
 
 rock.results = {}
 
 rock.test_lexer = function ()
-  local lexer = require "lexer"
   rock.results.lexer = {}
 
   test_commands = {
@@ -50,7 +50,6 @@ rock.test_lexer = function ()
     "/SSOUND /delete #channel 1",
     "/SSOUND /delete (match) 1",
     "/SSOUND /delete 1",
-    --"(error", -- It really works!
   }
 
   for i,command in ipairs(test_commands) do
@@ -63,6 +62,48 @@ rock.test_lexer = function ()
 
   return "✔"
 end
+
+rock.good_output = function (func, input, output)
+    if not output then
+        return assert(func(unpack(input)))
+    else
+        return output == assert(func(unpack(input)))
+    end
+end
+
+rock.bad_output = function (func, input, output)
+    if not output then
+        return func(unpack(input))
+    else
+        return output == func(unpack(input))
+    end
+end
+
+rock.bad_cases = {
+    {
+        name = "lexer.lex",
+        func = lexer.lex,
+        cases = {
+            {input={"(error"}},
+        },
+    },
+}
+
+rock.test_bad_cases = function ()
+    local emit = require "emit"
+    for i, case_pack in ipairs(rock.bad_cases) do
+        emit.info("%s bad", case_pack.name)
+        for i,case in ipairs(case_pack.cases) do
+            if not rock.bad_output(case_pack.func, case.input, case.output) then
+                io.write(".")
+            else
+                io.write("✗")
+            end
+        end
+    end
+    return "✔"
+end
+
 
 rock.run = function ()
   for name,func in pairs(rock) do

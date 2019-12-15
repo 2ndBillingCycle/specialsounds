@@ -120,9 +120,8 @@ end
 rock.run = function ()
   local files = {
     "header.lua", -- Check if we're running under HexChat, and register early to keep it happy
+    "emit.lua",
     "lexer.lua",
-    "build.lua",
-    "test.lua",
     "main.lua",
   }
 
@@ -147,5 +146,9 @@ rock.run = function ()
   -- Put the mushed file into ./build/SpecialSounds.lua
   -- 🎈
 end
+
+if test    then local test = require "test" test.run() end
+if build   then rock.run()                             end
+if bumpver then rock.bumpver()                         end
 
 return rock
