@@ -69,58 +69,45 @@ Also, since Lua doesn't have a native understanding of directories, it'd be easi
 --]==]
 
 local rock = {}
-
-local function print_error (message)
-  if type(message) ~= "string" then
-    error("Bad string for print_error")
-  end
-  print(message .. "\n\n")
-end
-local function print_message (message)
-  if type(message) ~= "string" then
-    error("Bad string for print_message")
-  end
-  print(message .. "\n\n")
-end
-
+local emit = require "emit"
 
 rock.bumpver = function ()
   -- If the global variable bumpver is not set, do nothing
   if not bumpver then return nil end
-  local new_file = ""
   local handle, err = io.open("header.lua", "r")
   if not handle and err then
-    print_error(("Bad file: %s"):format(tostring(err)))
+    emit.err("Bad file: %s", err)
+    return nil
   end
   local file = handle:read("*all")
-  if not file then
-    print_error("Missing header.lua")
-  end
-  version = ""
-  while true do
-    local line = handle:read("*line")
-    if not line then break end
-    local ver = line:match("^rock\.version = \"([0-9]+)\"")
-    if ver and type(tonumber(ver)) == "number" then
-      ver = tostring(ver + 1)
-      line = ("rock.version = \"%s\""):format(ver)
-    end
-    new_file = new_file..line
-  end
   assert(handle:close())
+  if not file then
+    emit.err("Empty header.lua")
+    return nil
+  end
+  local ver = file:match("\nrock\.version = \"([0-9]+)\"\n")
+  if ver and type(tonumber(ver)) == "number" then
+    ver = tostring(ver + 1)
+    line = ("rock.version = \"%s\""):format(ver)
+  else
+    emit.err("Can't find version number")
+    return nil
+  end
+  new_file = file:gsub("\nrock\.version = \"([0-9]+)\"\n", "\nrock.version = \""..ver.."\"\n")
   local handle, err = io.open("header.lua", "w")
   if not handle and err then
-    print_error(("Can't reopen: %s"):format(tostring(err)))
+    emit.err("Can't reopen: %s", err)
   end
-  handle:write(new_file)
+  assert(handle:write(new_file))
   assert(handle:close())
+  return true
 end
   
 
 rock.run = function ()
   local files = {
     "header.lua", -- Check if we're running under HexChat, and register early to keep it happy
-    "emit.lua",
+    "emit.lua",   -- Implements print(("%s"):format(""))
     "lexer.lua",
     "main.lua",
   }
@@ -129,10 +116,10 @@ rock.run = function ()
     -- Check to make sure the file exists
     local file, file_error = io.open(name, "rb")
     if file == nil then
-      print_error(file_error)
+      emit.err(file_error)
       return false
     elseif not file:read(0) then
-      print_error(("Empty file: %s"):format(name))
+      emit.err("Empty file: %s", name)
       return false
     end
     -- On the first one, optionally bump the version
@@ -147,8 +134,8 @@ rock.run = function ()
   -- 🎈
 end
 
-if test    then local test = require "test" test.run() end
-if build   then rock.run()                             end
-if bumpver then rock.bumpver()                         end
+if test    then local test = require "test" assert(test.run())     end
+if build   then                             assert(rock.run())     end
+if bumpver then                             assert(rock.bumpver()) end
 
 return rock

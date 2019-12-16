@@ -33,7 +33,7 @@ if not hexchat then
 end
 --]==]
 
-rock.version = "9"
+rock.version = "10"
 hexchat.register(
   "SpecialSounds",
   rock.version,
