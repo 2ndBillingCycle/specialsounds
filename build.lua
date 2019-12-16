@@ -57,7 +57,7 @@ Wait, this would break the `local foo = require "foo"`...
 Maybe the last line could instead load the table into `package.loaded`:
 
 ```lua
-package.loaded["<filename without extension"] = rock
+package.loaded["<filename without extension>"] = rock
 rock = nil
 ```
 
@@ -77,13 +77,13 @@ rock.bumpver = function ()
   local handle, err = io.open("header.lua", "r")
   if not handle and err then
     emit.err("Bad file: %s", err)
-    return nil
+    return false
   end
   local file = handle:read("*all")
   assert(handle:close())
   if not file then
     emit.err("Empty header.lua")
-    return nil
+    return false
   end
   local ver = file:match("\nrock\.version = \"([0-9]+)\"\n")
   if ver and type(tonumber(ver)) == "number" then
@@ -91,12 +91,13 @@ rock.bumpver = function ()
     line = ("rock.version = \"%s\""):format(ver)
   else
     emit.err("Can't find version number")
-    return nil
+    return false
   end
   new_file = file:gsub("\nrock\.version = \"([0-9]+)\"\n", "\nrock.version = \""..ver.."\"\n")
   local handle, err = io.open("header.lua", "w")
   if not handle and err then
     emit.err("Can't reopen: %s", err)
+    return false
   end
   assert(handle:write(new_file))
   assert(handle:close())
@@ -112,26 +113,45 @@ rock.run = function ()
     "main.lua",
   }
 
+  local outfile, file_error = io.open("SpecialSounds.lua", "w")
+  if outfile == nil then
+    emit.err(file_error)
+    return false
+  end
   for i,name in ipairs(files) do
     -- Check to make sure the file exists
-    local file, file_error = io.open(name, "rb")
+    local file, file_error = io.open(name, "r")
     if file == nil then
       emit.err(file_error)
+      assert(outfile:close())
       return false
     elseif not file:read(0) then
       emit.err("Empty file: %s", name)
+      assert(file:close())
+      assert(outfile:close())
       return false
     end
-    -- On the first one, optionally bump the version
-    -- Load/compile the file to make sure there aren't any obvious errors like syntax errors
-    -- Chop off the last line
-    -- Append the necessary 2 package loading lines
-    -- Mush it into the pile
-  end
+    text = file:read("*a")
+    assert(file:close())
+    -- NOTE: Should probably load/compile the file to make sure there aren't any obvious
+    -- errors like syntax errors
 
-  -- Make directory ./build if it doesn't exist
-  -- Put the mushed file into ./build/SpecialSounds.lua
-  -- 🎈
+    -- Is this a multiline file
+    local _, num_line_end = text:gsub("[\n\r]", "")
+    if num_line_end < 2 then
+      emit.err("File only 1 line: %s", name)
+      assert(outfile:close())
+    end
+    -- Chop off the last line
+    text = text:match("(.*)\n.+")
+    -- Append the necessary 2 package loading lines
+    text = text.."\npackage.loaded[\""..name.."\"] = rock\nrock = nil\n"
+    -- Mush it into the pile
+    assert(outfile:write(text))
+  end
+  assert(outfile:close())
+
+  return "🎈"
 end
 
 if test    then local test = require "test" assert(test.run())     end
