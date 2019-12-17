@@ -33,35 +33,12 @@ NOTE: Test runner does not yet isolate tests; following runs will see the state 
 --]]
 
 local rock = {}
-local lexer = require "lexer"
-
-rock.results = {}
-
-rock.check_output = function (name, func, input, output)
-  if type(name) ~= "string" then return false, "Bad name" end
-  if type(func) ~= "function" then return false, "func is not function" end
-  local results = {
-    input=input,
-    output=output,
-  }
-  if type(input) == "table" then
-    input[#input + 1] = func
-    results.result = {pcall(unpack(input))}
-    input[#input] = nil
-  else
-    results.result = {pcall(func, input)}
-  end
-  if rock.results[name] == nil then
-    rock.results[name] = {}
-  end
-  table.insert(rock.results[name], results)
-end
 
 rock.cases = {
   {
     name = "lexer.lex",
-    func = lexer.lex,
-    good_cases = {
+    func = (require "lexer").lex,
+    pass_cases = {
       "/SSOUND /add server #channel sound H:\\sound.wav match (matc%(h pattern)",
       "/SSOUND /add server #channel sound H:\\sound.wav",
       "/SSOUND /add server #channel match pattern",
@@ -84,39 +61,99 @@ rock.cases = {
       "/SSOUND /delete (match) 1",
       "/SSOUND /delete 1",
     },
-    bad_cases = {
+    fail_cases = {
       "(error",
     },
   },
 }
 
-rock.test_bad_cases = function ()
-  local emit = require "emit"
-  for i, case_pack in ipairs(rock.bad_cases) do
-    emit.info("%s bad", case_pack.name)
-    for i,case in ipairs(case_pack.cases) do
-      if not rock.bad_output(case_pack.func, case.input, case.output) then
-        io.write(".")
-      else
-        io.write("✗")
+--[==[ Each case table looks like:
+{
+  name = "name of module/function",
+  func = (require "module").func,
+  pass_cases = {
+    [[test input that is passed to the function; the function must return a truthy
+    value to be considered as having passed]],
+    {input="if the case is a table, the output will be compared against the output key",
+    output="for the test case to be considered as having been passed"},
+    {
+      input={{"If", "a table"}, "or if mutliple arguments", "need to be given"},
+      output={nil, "or a function may return an error", "or multiple values"},
+    },
+    "a nested table can be used as a test case -^",
+  },
+  fail_cases = {
+    "same thing for fail cases, except the function is expected to return an error",
+    {input="to make sure it returns the correct error",
+    output={nil, "the error message can be given in a table like this in the output key"},
+  },
+}
+--]==]
+
+rock.compare_output = function (desired, received)
+  -- received output must always be a table
+  if type(received) ~= "table" then return nil, "received not table" end
+  -- Are we comparing error output?
+  if type(desired) == "table" and desired[1] == nil then
+    return desired[2] == received[2]
+  elseif type(desired) ~= "table" then
+    -- Is desired a simple type?
+    return desired == received[1]
+  else
+    -- desired is a table, and does not indicate an error condition
+    for k,v in pairs(desired) do
+      if type(v) == "table" and type(received[k]) ~= "table" then
+        return false
+      elseif type(v) == "table" then
+        -- desired = {{"a"}} received = {{"a"}} -> desired={"a"} received={"a"}
+        local res, err = rock.compare_output(v, received[k])
+        if res == nil then return nil, err
+        elseif not res then return false end
+      elseif received[k] ~= v then
+        return false
       end
     end
+    return true
   end
+end
+
+rock.gather_output = function (name, func, input, output)
+  if type(name) ~= "string" then return nil, "name is not string" end
+  if type(func) ~= "function" then return nil, "func is not function" end
+  local results = {
+    name=name,
+    func=func,
+    input=input,
+    output=output,
+  }
+  if type(input) == "table" then
+    results.result = {pcall(func, unpack(input))}
+  else
+    results.result = {pcall(func, input)}
+  end
+  return results
+end
+
+rock.test_isolated_functions = function ()
+  local emit = require "emit"
+  
   return "✔"
 end
 
 rock.run = function ()
+  -- Find functions in this module that start with test_
   for name,func in pairs(rock) do
-    if not name:match("test_.+") then end
-    local result, err = pcall(func())
-    if not result then
-      emit.err("Error in test %s: %s", name, err)
-      rock.results[name] = err
-    else
-      rock.results[name] = result
+    if name:match("test_.+") then
+      local result, err = pcall(func)
+      if not result then
+        emit.err("Error in test %s: %s", name, err)
+        rock.results[name] = tostring(err)
+      else
+        rock.results[name] = result
+      end
     end
   end
-  return "♻️
+  return "♻️"
 end
 
 return rock
