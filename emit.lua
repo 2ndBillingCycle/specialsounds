@@ -54,12 +54,16 @@ rock.err = function (...)
     -- If not, don't modify the message
     -- If there was an error, print the error message
   elseif err then
-    hexchat.print(("Bad call to emit: %s"):format(err))
-    return false
+    err_message = ("Bad call to emit: %s"):format(err)
+    hexchat.print(err_message)
+    return nil, err_message
   end
 
   hexchat.print(message)
-  return true
+---[[ The following allows for this pattern:
+   -- if err then
+   --   return nil, emit.err("Error: %s", err)
+  return message
 end
 
 rock.info = rock.err

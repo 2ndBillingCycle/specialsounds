@@ -110,6 +110,7 @@ rock.run = function ()
     "header.lua", -- Check if we're running under HexChat, and register early to keep it happy
     "emit.lua",   -- Implements print(("%s"):format(""))
     "lexer.lua",
+    "test.lua",
     "main.lua",
   }
 
@@ -142,10 +143,22 @@ rock.run = function ()
       emit.err("File only 1 line: %s", name)
       assert(outfile:close())
     end
-    -- Chop off the last line
-    text = text:match("(.*)\n.+")
-    -- Append the necessary 2 package loading lines
-    text = text.."\npackage.loaded[\""..name.."\"] = rock\nrock = nil\n"
+    -- If this is main.lua, don't mangle it
+    --[[ Old way
+    if name ~= "main.lua" then
+        -- Chop off the last line
+        text = text:match("(.*)\n.+")
+        -- Append the necessary 2 package loading lines
+        text = text.."\npackage.loaded[\""..name.."\"] = rock\nrock = nil\n"
+    end
+    --]]
+    if name ~= "main.lua" then
+      local mod = name:match("^(%a+)%.lua")
+      if mod == nil then
+        return nil, emit.err("Bad file name: %s", name) end
+      -- Add function package.preload.<name> () ... end lines
+      text = "function package.preload."..mod.." ()\n"..text.."\nend\n"
+    end
     -- Mush it into the pile
     assert(outfile:write(text))
   end
@@ -155,7 +168,7 @@ rock.run = function ()
 end
 
 if test    then local test = require "test" assert(test.run())     end
-if build   then                             assert(rock.run())     end
 if bumpver then                             assert(rock.bumpver()) end
+if build   then                             assert(rock.run())     end
 
 return rock
