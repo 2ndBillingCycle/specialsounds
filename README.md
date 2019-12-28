@@ -4,11 +4,19 @@ This is a plugin for [HexChat][].
 
 It provides the `/ssound` command to play unique sounds when specific messages are received.
 
-# Installation
+## Requirements
+
+The plugin is written in [Lua][]. On Windows, the normal installation of HexChat includes [Lua][].
+
+![HexChat normal installation](https://i.imgur.com/SJ70WuY.png)
+
+On Linux, HexChat may require a separate package to be installed in or
+
+## Installation
 
 From [the releases page][releases], click on the assets dropdown and download the `SpecialSounds.lua` file into the HexChat `config/addons/` directory.
 
-If installed as a portable app, the `config/` directory is located in the same place HexChat is installed. Otherwise, [the HexChat documentation][hexchat-settings] describes where to find it.
+If HexChat was installed as a portable app, the `config/` directory is located in the same place HexChat is installed. Otherwise, [the HexChat documentation][hexchat-settings] describes where to find it.
 
 Then, from the HexChat text entry box, enter the following to load the plugin:
 
@@ -26,11 +34,8 @@ The command to load this plugin can be set as a `Connect command` for a server i
 
 This calls the command when connecting to the server, loading the plugin.
 
-The plugin is written in [Lua][] so that it can be used with the normal installation of HexChat. Python support is not required.
 
-![HexChat normal installation](https://i.imgur.com/SJ70WuY.png)
-
-# Setup
+## Setup
 
 `/ssound` has the following fields:
 
@@ -177,7 +182,7 @@ To stop the plugin without closing HexChat, unload the plugin:
 /lua unload SpecialSounds.lua
 ```
 
-## [Lua Patterns][lua-patterns]
+### [Lua Patterns][lua-patterns]
 
 The use of [Lua patterns][lua-patterns] has a few consequences:
 
@@ -195,15 +200,15 @@ This can be tedious, but hopefully doesn't come up much. If it does, and you wan
 
 Also, Lua patterns are case sensitive, so the `<pattern>` of `no` will *not* match `NOOOOO` or `No, stop`, but *will* match `That's enough!`.
 
-## Sound Files
+### Sound Files
 
 To play the sound files, this plugin takes advantage of the built-in HexChat `/splay <soundfile>` command, triggering it with the given sound file every time a message with `<pattern>` is received.
 
 HexChat supports [different sound file formats on different platforms](./REAMDE.md#only-wav-files-are-playable-on-windows), so test out the sound file with `/splay` before using it in a configuration, to make sure it can be played.
 
-# Limitations
+## Limitations
 
-## Available Message Types
+### Available Message Types
 
 The only messages this plugin responds to are HexChat `Channel Messages` (a type of [HexChat Text Event][hexchat-text-event]) which are how HexChat shows messages coming from other members participating in a channel.
 
@@ -216,7 +221,7 @@ This means that the following will not trigger a sound:
 
 Please [open an issue][issue] if you want any other text events to play unique sounds.
 
-## Only WAV Files Are Playable on Windows
+### Only WAV Files Are Playable on Windows
 
 HexChat officially supports Linux and Windows, and uses different mechanisms to play sound files on each platform.
 
@@ -239,13 +244,13 @@ On Windows, HexChat calls [`PlaySound`][PlaySound], which can process some kinds
 
 On Linux, HexChat uses [libcanberra][], which can use ALSA, PulseAudio, OSS and GStreamer to play sound files. Most formats should be playable.
 
-## Sound File Format Is Not Validated
+### Sound File Format Is Not Validated
 
 The sound file isn't checked to make sure it's a file HexChat understands. If HexChat doesn't understand it, and a message is matched, nothing happens; no error, no sound.
 
 Test the sound file with HexChat's built in `/splay` command first to make sure HexChat can use it. `/help splay` describes how to use the command.
 
-## Sounds Cannot Overlap
+### Sounds Cannot Overlap
 
 HexChat can highlight words (by default, your IRC nick), and can also emit the Text Event named `Beep`. These settings are under `Settings -> Preferences` and then `Chatting -> Alerts`:
 
@@ -285,7 +290,7 @@ Match:   meeting
 
 If a `Channel message` is received that reads `ATTENTION: All staff report to Sam's office for a brief meeting`, only `H:\attention.wav` is played.
 
-## Settings Are Not Synced Across Multiple HexChat Clients
+### Settings Are Not Synced Across Multiple HexChat Clients
 
 If HexChat is started more than once, and this plugin is loaded in each instance, settings set in any HexChat window are saved, but those changes aren't picked up by the other clients.
 
@@ -295,11 +300,11 @@ Reload the plugin to update that window:
 /lua reload specialsounds.lua
 ```
 
-Use a different file name if it's not installed to HexChat's `config/addons/` folder.
+Use a different file name if this plugin was not installed to HexChat's `config/addons/` folder.
 
 A better solution is to start HexChat once, and pop out the different channels and servers into different windows.
 
-## Possible Bugs
+### Possible Bugs
 
 If I've mistyped something in this plugin, any of the following could happen:
 
@@ -314,7 +319,7 @@ Things that cannot happen:
 
 This plugin does not have that functionality, and so any bugs it may have can't accidentally make those things happen.
 
-# Hostnames
+## Hostnames
 
 A server *hostname*, such as `irc.example.com`, is the name that a particular server can be reached at.
 Hostnames are like the main part of a URL, for example, `https://example.com/login` includes the hostname of `example.com` as the server you want to connect to (in this case, for normal web browsing).
@@ -333,7 +338,7 @@ There are actually two servers in `irc.example.com`, one is `na.irc.example.com`
 Despite saying "Connect to `irc.example.com`," This plugin will report for either `na.irc.example.com` or `eu.irc.example.com`, depending on which one actually connected.
 This brings up the possibility of a sound configured in one not playing in the other, which can be solved by using patterns to match the common portion (`irc.example.com`) of the server hostname, instead of matching exactly.
 
-# Motivation
+## Motivation
 
 I had a problem.
 
