@@ -164,6 +164,7 @@ rock.run = function ()
   end
   assert(outfile:close())
 
+  emit.info("🎈")
   return "🎈"
 end
 

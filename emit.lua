@@ -1,65 +1,56 @@
 local rock = {}
+-- Import header
+local header = require "header"
 
-rock.err = function (...)
+rock.format = function (...)
 ---[[ This function tries to refactor the idiom:
-   -- print(("Error: %s"):format(err))
+   -- ("Error: %s"):format(err)
    -- into
-   -- local print = require "print"
-   -- print.err("Err: %s", err)
+   -- local emit = require "emit"
+   -- print(emit.format("Err: %s", err))
    --
-   -- It also tries to switch between hexchat behavriour, where
-   -- crashing Lua by calling error() is a bad idea, and running
-   -- under the interpreter during builds and testing, where
-   -- failing early is the desired action.
-   --
-   -- Lastly, this only naively wraps around string substitution
-   -- with %s, as opposed to the whole sprintf motley.
+   -- This only wraps around string substitution %s,
+   -- as opposed to the whole sprintf motley.
    -- This can be expanded later if need be.
 
-  -- Import header
-  local header = require "header"
-
   -- First, collect all the arguments, and convert them to strings
-  -- NOTE: Is there any reason for the type check if tostring()
-  -- doesn't mess with strings?
   local args = {...}
   for i=1,#args do
-    if type(args[i]) ~= "string" then
-      args[i] = tostring(args[i])
-    end
+    args[i] = tostring(args[i])
   end
-  -- Do nothing if no arguments were passed
-  if #args < 1 then return nil end
+  -- Return empty string if no arguments were passed
+  if #args < 1 then return "" end
 
-  local err = ""
   -- Count how many %s substitution markers are in the message
   local _, subs = (args[1]):gsub("%%s", "")
   -- Check to make sure we have exactly enough replacements for
   -- each %s
   if subs ~= (#args - 1) then
-    err = "Imbalance in replacements"
+    return nil, "Imbalance in replacements"
   end
-
-  -- Always check for errors; we'll emit them at the end when we
-  -- check if we're running under HexChat or not
 
   -- Pop out the first argument, which is the primary string
-  local message = ""
-  if err == "" then
-    message = table.remove(args, 1)
-  end
+  local message = table.remove(args, 1)
   -- If there were replacements, format the string
-  if err == "" and #args > 0 then
-    message = message:format(unpack(args)).."\n\n"
+  if #args > 0 then
+    message = message:format(unpack(args))
     -- If not, don't modify the message
-    -- If there was an error, print the error message
-  elseif err then
-    err_message = ("Bad call to emit: %s"):format(err)
-    hexchat.print(err_message)
-    return nil, err_message
+  -- If there was an error, print the error message
   end
 
-  hexchat.print(message)
+  return message
+end
+
+rock.err = function (...)
+  local message, err = rock.format(...)
+  -- If there was an error, print the error message
+  if not message then
+    hexchat.print("Error in emit: "..tostring(err))
+    error(err)
+  end
+
+  hexchat.print(message.."\n\n")
+
 ---[[ The following allows for this pattern:
    -- if err then
    --   return nil, emit.err("Error: %s", err)
@@ -67,6 +58,33 @@ rock.err = function (...)
 end
 
 rock.info = rock.err
+
+rock.print = function (...)
+  local message, err = rock.format(...)
+  -- If there was an error, print the error message
+  if not message then
+    hexchat.print("Error in emit: "..tostring(err))
+    error(err)
+  end
+
+  hexchat.print(message)
+
+  return message
+end
+
+-- This function won't show any output while running under HexChat
+rock.write = function (...)
+  local message, err = rock.format(...)
+  -- If there was an error, print the error message
+  if not message then
+    hexchat.print("Error in emit: "..tostring(err))
+    error(err)
+  end
+
+  io.write(message)
+
+  return message
+end
 
 -- I need to be able to exit cleanly when running under hexchat,
 -- and crash when not.
