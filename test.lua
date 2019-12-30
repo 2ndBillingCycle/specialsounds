@@ -81,6 +81,28 @@ The full command is:
       },
     },
   },
+  {
+    name="emit.to_string",
+    func=emit.to_string,
+    cases = {
+      {
+        input={{1,2,3}},
+        output="{ 1, 2, 3, }",
+      },
+      {
+        input={{3,2,1}},
+        output="{ 3, 2, 1, }",
+      },
+      {
+        input={{1,nil,nil,4,5,nil}},
+        output="{ 1, nil, nil, 4, 5, }",
+      },
+      {
+        input={{key="value"}},
+        output="{\nkey = \"value\",\n}",
+      },
+    },
+  },
 }
 
 --[==[ Each case table looks like this
@@ -115,7 +137,7 @@ Example:
 
 rock.compare_tables = function (desired, received)
   if type(desired) ~= "table" or type(received) ~= "table" then
-    return nil, "args must be tables"
+    error("args must be tables")
   end
   -- pull out each element of the desired table, and compare to each element of received
   for k,v in pairs(desired) do
@@ -164,7 +186,7 @@ Desired is either true, or the output key in a test case:
 }
 --]]
   -- received output must always be a table
-  if type(received) ~= "table" then return nil, "received not table" end
+  if type(received) ~= "table" then error("received not table") end
   -- Did pcall catch an error?
   if not received[1] then
     return false
@@ -180,9 +202,9 @@ Desired is either true, or the output key in a test case:
     return desired == received[2]
   elseif type(desired) == "table" then
     -- desired is a table, and does not indicate an error condition
-    return rock.compare_tables(desired, received[1])
+    return rock.compare_tables(desired, received[2])
   else
-    return nil, "unkown desired/received sructure"
+    error("unkown desired/received sructure")
   end
 end
 
@@ -201,7 +223,8 @@ rock.results = {}
 
 rock.add_result = function (name, func, input, output, result, comparison, err)
   local last_result = rock.results[ #(rock.results) ]
-  if last_result.name == name and
+  if type(last_result) == "table" and
+     last_result.name == name and
      last_result.func == func and
      last_result.input == input and
      last_result.output == output and
@@ -215,8 +238,8 @@ rock.add_result = function (name, func, input, output, result, comparison, err)
     last_result.err = err
   else
     table.insert(rock.results, {
-      name=case.name,
-      func=case.func,
+      name=name,
+      funcfunc,
       input=input,
       output=output,
       result=nil,
@@ -227,7 +250,7 @@ rock.add_result = function (name, func, input, output, result, comparison, err)
 end
 
 rock.perform_test = function (name, func, input, output)
-  if type(name) ~= "string" then return nil, "name is not string" end
+  if type(name) ~= "string" then error("name is not string") end
   local results = {
     name=name,
     func=func,
@@ -236,10 +259,19 @@ rock.perform_test = function (name, func, input, output)
   }
   local get_output = emit.record_output()
   if type(input) == "table" then
-    -- NOTE: These should be changed to xpcall()
-    results.result = {pcall(func, unpack(input))}
+    results.result = {xpcall(
+                              function ()
+                                return func(unpack(input))
+                              end,
+                              debug.traceback
+                            )}
   else
-    results.result = {pcall(func, input)}
+    results.result = {xpcall(
+                              function ()
+                                return func(input)
+                              end,
+                              debug.traceback
+                            )}
   end
   results.print = get_output()
   results.comparison, results.err = rock.compare_output(output, results.result)
@@ -308,7 +340,7 @@ rock.summarize_test_results = function (test_results)
       pass[name] = 0
       fail[name] = 0
       errs[name] = 0
-      emit.print("Testing %s\n", name)
+      emit.print("Results for %s\n", name)
     end
     if result.err ~= nil then
       emit.print(
@@ -362,6 +394,10 @@ error: %s
 end
 
 rock.run = function ()
+  -- Turn off pretty_printing of tables during tests, as that function is used
+  -- to print error messages, as an error thrown during printing error messages
+  -- would make finding the error in emit.to_string more difficult
+  emit.pretty_printing = false
   -- Find functions in this module that start with test_ and run them
   for name,func in pairs(rock) do
     if name:match("^test_.+") then
@@ -381,9 +417,11 @@ rock.run = function ()
       end
     end
   end
+  -- Turn pretty printing back on for test summaries; this could still error
+  emit.pretty_printing = true
   local success, err = rock.summarize_test_results(rock.results)
   if not success then return success, "Error in test summarization" end
-  return "♻️"
+  return "tested"
 end
 
 return rock

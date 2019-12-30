@@ -2,6 +2,74 @@ local rock = {}
 -- Import header
 local header = require "header"
 
+rock.member = function (var, tbl)
+  -- Checks if var is an element of array tbl
+  if type(tbl) ~= "table" then error("tbl not table") end
+  for i,val in ipairs(tbl) do
+    if val == var then return true end
+  end
+  return false
+end
+
+rock.to_string = function (var, cur_str, seen_tables)
+  if not cur_str then cur_str = "" end
+  if not seen_tables then seen_tables = {} end
+  if not var then return "nil"
+  elseif type(var) ~= "table" then return tostring(var)
+  end
+  
+  local array = {}
+  local maxn = table.maxn(var)
+  local dict = {}
+  for key, value in pairs(var) do
+    if type(key) == "number" and tostring(key):match("^%d+$") then
+      array[#array + 1] = key
+    else
+      dict[#dict + 1] = key
+    end
+  end
+  table.sort(array)
+  for i=1,maxn do
+    if i ~= array[i] then
+      table.insert(array, i, "nil")
+    end
+  end
+  cur_str = cur_str.."{ "
+  for i,key in ipairs(array) do
+    if type(var[key]) == "table" and not rock.member(var[key], seen_tables) then
+      table.insert(seen_tables, var[key])
+      cur_str = rock.to_string(var[key], cur_str, seen_tables)
+    elseif type(var[key]) == "table" then
+      cur_str = cur_str..tostring(var[key]).." (seen), "
+    else
+      cur_str = cur_str..tostring(var[key])..", "
+    end
+  end
+  for i,val in ipairs(dict) do
+    local val_str = "\n"
+    if type(val) == "string" then
+      val_str = val_str..val.." = "
+    elseif type(val) == "table" and not rock.member(val, seen_tables) then
+      table.insert(seen_tables, val)
+      val_str = val_str.."[ "..rock.to_string(val, "", seen_tables).." ] = "
+    elseif type(val) == "table" then
+      val_str = val_str.."["..tostring(val).." (seen)] = "
+    else
+      val_str = val_str.."["..tostring(val).."] = "
+    end
+    if type(var[val]) == "table" and not rock.member(val, seen_tables) then
+      table.insert(seen_tables, val)
+      val_str = val_str..rock.to_string(var[val], "", seen_tables)..",\n"
+    elseif type(var[val]) == "table" then
+      val_str = val_str..tostring(var[val]).." (seen),\n"
+    else
+      val_str = val_str..tostring(var[val])..",\n"
+    end
+    cur_str = cur_str..val_str
+  end
+  return cur_str.."}"
+end
+
 rock._format = function (...)
 ---[[ This function tries to refactor the idiom:
    -- ("Error: %s"):format(err)
@@ -16,7 +84,11 @@ rock._format = function (...)
   -- First, collect all the arguments, and convert them to strings
   local args = {...}
   for i=1,#args do
-    args[i] = tostring(args[i])
+    if rock.pretty_printing then
+      args[i] = rock.to_string(args[i])
+    else
+      args[i] = tostring(args[i])
+    end
   end
   -- Return empty string if no arguments were passed
   if #args < 1 then return "" end
@@ -41,6 +113,7 @@ rock._format = function (...)
   return message
 end
 rock.format = rock._format
+rock.pretty_printing = true
 
 rock._err = function (...)
   local message, err = rock.format(...)
