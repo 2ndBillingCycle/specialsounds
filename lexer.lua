@@ -67,10 +67,6 @@ rock.lex = function (str)
   local function unbalanced_parenthesis_error (group)
     local missing_paren = parenthesis_count > 0 and ")" or "("
     missing_paren = missing_paren:rep(math.abs( parenthesis_count ))
-    print(([[
-parenthesis_group: %s
-command_name: %s
-str: %s]]):format(tostring(parenthesis_group), tostring(command_name), tostring(str)))
     emit.err([[
 Unbalanced parenthesis: missing %s
 

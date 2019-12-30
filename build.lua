@@ -71,6 +71,7 @@ Also, since Lua doesn't have a native understanding of directories, it'd be easi
 local rock = {}
 local emit = require "emit"
 
+-- NOTE: Changes line endings to CRLF :(
 rock.bumpver = function ()
   -- If the global variable bumpver is not set, do nothing
   if not bumpver then return nil end
@@ -164,8 +165,8 @@ rock.run = function ()
   end
   assert(outfile:close())
 
-  emit.info("🎈")
-  return "🎈"
+  emit.info("Built")
+  return "Built"
 end
 
 if test    then local test = require "test" assert(test.run())     end

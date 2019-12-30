@@ -2,7 +2,7 @@ local rock = {}
 -- Import header
 local header = require "header"
 
-rock.format = function (...)
+rock._format = function (...)
 ---[[ This function tries to refactor the idiom:
    -- ("Error: %s"):format(err)
    -- into
@@ -40,8 +40,9 @@ rock.format = function (...)
 
   return message
 end
+rock.format = rock._format
 
-rock.err = function (...)
+rock._err = function (...)
   local message, err = rock.format(...)
   -- If there was an error, print the error message
   if not message then
@@ -56,10 +57,11 @@ rock.err = function (...)
    --   return nil, emit.err("Error: %s", err)
   return message
 end
+rock.err = rock._err
+rock._info = rock._err
+rock.info = rock._err
 
-rock.info = rock.err
-
-rock.print = function (...)
+rock._print = function (...)
   local message, err = rock.format(...)
   -- If there was an error, print the error message
   if not message then
@@ -71,9 +73,10 @@ rock.print = function (...)
 
   return message
 end
+rock.print = rock._print
 
 -- This function won't show any output while running under HexChat
-rock.write = function (...)
+rock._write = function (...)
   local message, err = rock.format(...)
   -- If there was an error, print the error message
   if not message then
@@ -85,7 +88,71 @@ rock.write = function (...)
 
   return message
 end
+rock.write = rock._write
 
+rock.record = function (...)
+  local message, err = rock.format(...)
+  if not message then
+    error(err)
+  end
+  rock.records[ #rock.records + 1 ] = message
+  return message
+end
+
+rock.set_record = function ()
+  rock.err = rock.record
+  rock.info = rock.record
+  rock.print = rock.record
+  rock.write = rock.record
+end
+
+rock.unset_record = function ()
+  rock.err = rock._err
+  rock.info = rock._info
+  rock.print = rock._print
+  rock.write = rock._write
+end
+
+rock.record_output = function()
+---[[ Sets all the output functions to record their output instead of printing it,
+   -- Returns a function which, when called, resets the printing functions,
+   -- and returns an array of all the strings that were generated from calling
+   -- the print functions.
+   -- This is meant to be used like a wrapper:
+   -- 
+   --> emit = require "emit"                    
+   --> get_output = emit.record_output()
+   --> (function () emit.print("Hello!") end)()
+   --> emit.info("Hi!")                         
+   --> records = get_output()
+   --> emit.print("Hello!")
+   --Hello!
+   --> =#records
+   --2
+   --> =records[1] 
+   --Hello!
+   --> =records[2]
+   --Hi!
+   -- 
+   -- Currently, this loses the custom formatting done by any functions 🤷‍♀️
+
+  -- If anything is currently being recorded, don't clear the records
+  if rock.err == rock.record or
+     rock.info == rock.record or
+     rock.print == rock.record or
+     rock.write == rock.record then
+    rock.set_record()
+  else
+    rock.set_record()
+    rock.records = {}
+  end
+  
+  local get_records = function ()
+    rock.unset_record()
+    return rock.records
+  end
+  return get_records
+end
 -- I need to be able to exit cleanly when running under hexchat,
 -- and crash when not.
 -- We would not do this in the print function

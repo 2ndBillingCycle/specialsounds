@@ -34,8 +34,6 @@ NOTE: Test runner does not yet isolate tests; subsequent cases will see the stat
 
 local rock = {}
 
-dbg = require "debugger"
-
 local emit = require "emit"
 
 rock.cases = {
@@ -116,7 +114,7 @@ Example:
 --]==]
 
 rock.compare_tables = function (desired, received)
-  if type(desired) ~= "table" or type(received) ~= "tables" then
+  if type(desired) ~= "table" or type(received) ~= "table" then
     return nil, "args must be tables"
   end
   -- pull out each element of the desired table, and compare to each element of received
@@ -132,6 +130,8 @@ rock.compare_tables = function (desired, received)
     -- otherwise compare the values
     elseif received[k] ~= v then
       return false
+    else
+      --emit.print("passed")
     end
   end
   return true
@@ -193,10 +193,38 @@ end
    --     input="input argument(s)",
    --     output="desired output",
    --     result={func(input)},
+   --     print={"printed string"},
    --     comparison=rock.compare_output(output, result),
    --     err="error string returned by test runner itself; may be nil if no error",
    --   }
 rock.results = {}
+
+rock.add_result = function (name, func, input, output, result, comparison, err)
+  local last_result = rock.results[ #(rock.results) ]
+  if last_result.name == name and
+     last_result.func == func and
+     last_result.input == input and
+     last_result.output == output and
+     type(last_result.name) == "string" and
+     type(last_result.func) == "function" and
+     type(last_result.input) ~= "nil" and
+     type(last_result.output) ~= "nil" then
+
+    last_result.result = result
+    last_result.comparison = comparison
+    last_result.err = err
+  else
+    table.insert(rock.results, {
+      name=case.name,
+      func=case.func,
+      input=input,
+      output=output,
+      result=nil,
+      comparison=nil,
+      err=tostring(err),
+    })
+  end
+end
 
 rock.perform_test = function (name, func, input, output)
   if type(name) ~= "string" then return nil, "name is not string" end
@@ -206,13 +234,22 @@ rock.perform_test = function (name, func, input, output)
     input=input,
     output=output,
   }
+  local get_output = emit.record_output()
   if type(input) == "table" then
+    -- NOTE: These should be changed to xpcall()
     results.result = {pcall(func, unpack(input))}
   else
     results.result = {pcall(func, input)}
   end
-  results.comparison = rock.compare_output(output, results.result)
-  if results.comparison then emit.write(".") else emit.write("x") end
+  results.print = get_output()
+  results.comparison, results.err = rock.compare_output(output, results.result)
+  if results.comparison then
+    emit.write(".") 
+  elseif results.err then
+    emit.write("X")
+  else
+    emit.write("x")
+  end
   table.insert(rock.results, results)
   return "."
 end
@@ -231,35 +268,28 @@ rock.test_isolated_functions = function ()
         input = test_case
         output = true -- Default is to test if the function returns a truthy value
       end
-      if input == "error)" then dbg.auto_where=5 dbg() end
+
       local result, err = rock.perform_test(
         case.name,
         case.func,
         input,
         output
       )
+
       if not result then
         -- Store an error string in place of the result table
-        local last_result = rock.results[ #(rock.results) ]
-        if last_result.name ~= case.name or
-           last_result.func ~= case.func or
-           last_result.input ~= input or
-           last_result.output ~= output then
-          table.insert(rock.results, {
-            name=case.name,
-            func=case.func,
-            input=input,
-            output=output,
-            result=nil,
-            comparison=nil,
-            err=tostring(err),
-          })
-          emit.write(".")
-        else
-          last_result.err = tostring(err)
-          emit.write("x")
-        end
+        rock.add_result(
+          case.name,
+          case.func,
+          input,
+          output,
+          result,
+          nil,
+          err
+        )
+        emit.write("X")
       end
+
     end
   end
   emit.write("\n")
@@ -267,8 +297,68 @@ rock.test_isolated_functions = function ()
 end
 
 rock.summarize_test_results = function (test_results)
-  -- Fill out later
-  return "🤷"
+  emit.print("\nTest results:\n")
+  local pass = {}
+  local fail = {}
+  local errs = {}
+  local name = ""
+  for i,result in ipairs(rock.results) do
+    if result.name ~= name then
+      name = result.name
+      pass[name] = 0
+      fail[name] = 0
+      errs[name] = 0
+      emit.print("Testing %s\n", name)
+    end
+    if result.err ~= nil then
+      emit.print(
+        [[
+Error in test:
+input:
+%s
+error:
+%s
+]],
+        result.input,
+        result.err
+      )
+      errs[name]  = errs[name] + 1
+    elseif result.comparison ~= true then
+      emit.print(
+        [[
+Test failure:
+input:
+%s
+output:
+%s
+pass output:
+%s
+]],
+        result.input,
+        result.result,
+        result.output
+      )
+      fail[name] = fail[name] + 1
+    else
+      pass[name] = pass[name] + 1
+    end
+  end
+  emit.print("\nSummary:")
+  for name,_ in pairs(pass) do
+    emit.print(
+      [[
+Function: %s
+pass: %s
+fail: %s
+error: %s
+]],
+      name,
+      pass[name],
+      fail[name],
+      errs[name]
+    )
+  end
+  return true
 end
 
 rock.run = function ()
@@ -278,16 +368,16 @@ rock.run = function ()
       emit.print(name)
       local result, err = xpcall(func, debug.traceback)
       if not result then
-        emit.err("Error in test %s:\n%s", name, err)
-        table.insert(rock.results, {
-          name=name,
-          func=func,
-          input=nil,
-          output=nil,
-          result=result,
-          comparison=nil,
-          err=err,
-        })
+        rock.add_result(
+          name,
+          func,
+          input,
+          output,
+          result,
+          comparison,
+          err
+        )
+        emit.write("X\n")
       end
     end
   end
