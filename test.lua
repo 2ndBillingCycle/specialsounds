@@ -99,7 +99,11 @@ The full command is:
       },
       {
         input={{key="value"}},
-        output="{\nkey = \"value\",\n}",
+        output="{\n  key = \"value\",\n}",
+      },
+      {
+        input={{[1]="value"}},
+        output="{\n  [1] = \"value\",\n}",
       },
     },
   },
@@ -319,10 +323,11 @@ rock.test_isolated_functions = function ()
           nil,
           err
         )
-        emit.write("X")
+        --emit.write("X")
+        emit.write("O")
       end
-
     end
+    emit.write("\n")
   end
   emit.write("\n")
   return "."
@@ -423,5 +428,7 @@ rock.run = function ()
   if not success then return success, "Error in test summarization" end
   return "tested"
 end
+
+if test then assert(rock.run()) end
 
 return rock

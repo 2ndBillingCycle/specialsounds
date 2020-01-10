@@ -11,6 +11,13 @@ rock.member = function (var, tbl)
   return false
 end
 
+rock.string_repr = function (str)
+  if type(str) ~= "string" then
+    return str
+  end
+  return "\""..str:gsub("\n","\\n").."\""
+end
+
 rock.to_string = function (var, cur_str, seen_tables)
   if not cur_str then cur_str = "" end
   if not seen_tables then seen_tables = {} end
@@ -34,7 +41,7 @@ rock.to_string = function (var, cur_str, seen_tables)
       table.insert(array, i, "nil")
     end
   end
-  cur_str = cur_str.."{ "
+  cur_str = cur_str.."{"
   for i,key in ipairs(array) do
     if type(var[key]) == "table" and not rock.member(var[key], seen_tables) then
       table.insert(seen_tables, var[key])
@@ -42,13 +49,13 @@ rock.to_string = function (var, cur_str, seen_tables)
     elseif type(var[key]) == "table" then
       cur_str = cur_str..tostring(var[key]).." (seen), "
     else
-      cur_str = cur_str..tostring(var[key])..", "
+      cur_str = cur_str.." "..tostring(var[key])..","
     end
   end
   for i,val in ipairs(dict) do
     local val_str = "\n"
     if type(val) == "string" then
-      val_str = val_str..val.." = "
+      val_str = val_str..rock.string_repr(val).." = "
     elseif type(val) == "table" and not rock.member(val, seen_tables) then
       table.insert(seen_tables, val)
       val_str = val_str.."[ "..rock.to_string(val, "", seen_tables).." ] = "
@@ -59,11 +66,11 @@ rock.to_string = function (var, cur_str, seen_tables)
     end
     if type(var[val]) == "table" and not rock.member(val, seen_tables) then
       table.insert(seen_tables, val)
-      val_str = val_str..rock.to_string(var[val], "", seen_tables)..",\n"
+      val_str = val_str..rock.to_string(var[val], "", seen_tables)..","
     elseif type(var[val]) == "table" then
-      val_str = val_str..tostring(var[val]).." (seen),\n"
+      val_str = val_str..tostring(var[val]).." (seen),"
     else
-      val_str = val_str..tostring(var[val])..",\n"
+      val_str = val_str..tostring(var[val])..","
     end
     cur_str = cur_str..val_str
   end
