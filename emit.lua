@@ -18,63 +18,169 @@ rock.string_repr = function (str)
   return "\""..str:gsub("\n","\\n").."\""
 end
 
-rock.to_string = function (var, cur_str, seen_tables)
-  if not cur_str then cur_str = "" end
-  if not seen_tables then seen_tables = {} end
-  if not var then return "nil"
-  elseif type(var) ~= "table" then return tostring(var)
+rock.to_string = function (var)
+  local expanded = false
+  local open = 1
+  local close = 2
+  local key_start = 3
+  local key_end = 4
+  local val_start = 5
+  local val_end = 6
+  local nil_val = 7
+  local sval_start = 8
+  local sval_end = 9
+
+  local concat = function (str_tbl)
+    local concatted = ""
+    for i,val in ipairs(str_tbl) do
+      if val == open then
+        concatted = concatted.."{"
+      elseif val == close then
+        concatted = concatted:gsub(", ?$", "").."},"
+      elseif val == key_start then
+        -- Do nothing
+      elseif val == key_end then
+        concatted = concatted.." = "
+      elseif val == val_start then
+        -- Do nothing
+      elseif val == val_end then
+        concatted = concatted..", "
+      elseif val == nil_val then
+        concatted = concatted.."nil"
+      elseif val == sval_start then
+        -- Do nothing
+      elseif val == sval_end then
+        concatted = concatted..", "
+      else
+        concatted = concatted..val
+      end
+    end
+    return concatted:gsub(",$","")
+  end
+
+  local expand = function (str_tbl)
+    local concatted = ""
+    local indent_level = 0
+    local indent_step = 2
+    local indent_char = " "
+    for i,val in ipairs(str_tbl) do
+      if val == open then
+        print(indent_level)
+        concatted = concatted..string.rep(indent_char, indent_level)
+        concatted = concatted.."{\n"
+        indent_level = indent_level + indent_step
+      elseif val == close then
+        indent_level = indent_level - indent_step
+        concatted = concatted..string.rep(indent_char, indent_level)
+        concatted = concatted.."},\n"
+      elseif val == key_start then
+        concatted = concatted..string.rep(indent_char, indent_level)
+      elseif val == key_end then
+        concatted = concatted.." = "
+      elseif val == val_start then
+        -- Do nothing
+      elseif val == val_end then
+        concatted = concatted..",\n"
+      elseif val == nil_val then
+        concatted = concatted.."nil"
+      elseif val == sval_start then
+        concatted = concatted..string.rep(indent_char, indent_level)
+      elseif val == sval_end then
+        concatted = concatted..",\n"
+      else
+        concatted = concatted..val
+      end
+    end
+    return concatted:gsub(",?\n?$","")
+  end
+
+  local function inner (var, cur_str, seen_tables)
+    if not var then return {"nil"}
+    elseif type(var) ~= "table" then return {tostring(var)}
+    end
+    if not cur_str then cur_str = {} end
+    if not seen_tables then seen_tables = {} end
+    
+    local indices = {}
+    local keys = {}
+    for key, value in pairs(var) do
+      if tostring(key):match("^%d+$") then
+        indices[#indices + 1] = key
+      else
+        keys[#keys + 1] = key
+      end
+    end
+    -- Reorganizes table's values using `<` and `>`
+    table.sort(indices)
+    -- I'm assuming that there's no ordering of values in a Lua array table
+    -- that can generate a table with keys outside the range of [1,inf) of
+    -- natural numbers:
+    -- t={}
+    -- n={-9, nil, [t]=t,[1.1]=0,[io.stdin]=2,}
+    -- All of the keys for table n will be a natural number [1,inf)
+    local maxn = 0 -- ensures that `for i=1,0 never runs`
+    if #indices > 1 then
+      maxn = indices[#indices]
+    end
+    cur_str[#cur_str + 1] = open
+    for i=1,maxn do
+      cur_str[#cur_str + 1] = sval_start
+      if indices[i] ~= i then
+        cur_str[#cur_str + 1] = nil_val
+        -- Doesn't matter what we insert, we just want to push the rest of the values over
+        table.insert(indices, i, i)
+      elseif type(var[i]) == "table" and not rock.member(var[i], seen_tables) then
+        table.insert(seen_tables, var[i])
+        inner(var[i], cur_str, seen_tables)
+      elseif type(var[i]) == "table" then
+        cur_str[#cur_str + 1] = tostring(var[i]).." (seen)"
+      elseif type(var[i]) == "string" then
+        cur_str[#cur_str + 1] = "\""..var[i].."\""
+      else
+        cur_str[#cur_str + 1] = tostring(var[i])
+      end
+      cur_str[#cur_str + 1] = sval_end
+    end
+    for i,key in ipairs(keys) do
+      local val = var[key]
+      if #indices > 0 or i > 1 then expanded = true end
+      cur_str[#cur_str + 1] = key_start
+      if type(key) == "string" then
+        cur_str[#cur_str + 1] = key
+      elseif type(key) == "table" and not rock.member(key, seen_tables) then
+        table.insert(seen_tables, key)
+        cur_str[#cur_str + 1] = "["
+        inner(var, cur_str, seen_tables)
+        cur_str[#cur_str + 1] = "]"
+      elseif type(key) == "table" then
+        cur_str[#cur_str + 1] = "["
+        cur_str[#cur_str + 1] = tostring(key).." (seen)"
+        cur_str[#cur_str + 1] = "]"
+      else
+        cur_str[#cur_str + 1] = "["
+        cur_str[#cur_str + 1] = tostring(key)
+        cur_str[#cur_str + 1] = "]"
+      end
+      cur_str[#cur_str + 1] = key_end
+      cur_str[#cur_str + 1] = val_start
+      if type(val) == "table" and not rock.member(key, seen_tables) then
+        table.insert(seen_tables, val)
+        inner(var, cur_str, seen_tables)
+      elseif type(val) == "table" then
+        cur_str[#cur_str + 1] = tostring(val).." (seen)"
+      elseif type(val) == "string" then
+        cur_str[#cur_str + 1] = "\""..val.."\""
+      else
+        cur_str[#cur_str + 1] = tostring(val)
+      end
+      cur_str[#cur_str + 1] = val_end
+    end
+    cur_str[#cur_str + 1] = close
+    return cur_str
   end
   
-  local array = {}
-  local maxn = table.maxn(var)
-  local dict = {}
-  for key, value in pairs(var) do
-    if type(key) == "number" and tostring(key):match("^%d+$") then
-      array[#array + 1] = key
-    else
-      dict[#dict + 1] = key
-    end
-  end
-  table.sort(array)
-  for i=1,maxn do
-    if i ~= array[i] then
-      table.insert(array, i, "nil")
-    end
-  end
-  cur_str = cur_str.."{"
-  for i,key in ipairs(array) do
-    if type(var[key]) == "table" and not rock.member(var[key], seen_tables) then
-      table.insert(seen_tables, var[key])
-      cur_str = rock.to_string(var[key], cur_str, seen_tables)
-    elseif type(var[key]) == "table" then
-      cur_str = cur_str..tostring(var[key]).." (seen), "
-    else
-      cur_str = cur_str.." "..tostring(var[key])..","
-    end
-  end
-  for i,val in ipairs(dict) do
-    local val_str = "\n"
-    if type(val) == "string" then
-      val_str = val_str..rock.string_repr(val).." = "
-    elseif type(val) == "table" and not rock.member(val, seen_tables) then
-      table.insert(seen_tables, val)
-      val_str = val_str.."[ "..rock.to_string(val, "", seen_tables).." ] = "
-    elseif type(val) == "table" then
-      val_str = val_str.."["..tostring(val).." (seen)] = "
-    else
-      val_str = val_str.."["..tostring(val).."] = "
-    end
-    if type(var[val]) == "table" and not rock.member(val, seen_tables) then
-      table.insert(seen_tables, val)
-      val_str = val_str..rock.to_string(var[val], "", seen_tables)..","
-    elseif type(var[val]) == "table" then
-      val_str = val_str..tostring(var[val]).." (seen),"
-    else
-      val_str = val_str..tostring(var[val])..","
-    end
-    cur_str = cur_str..val_str
-  end
-  return cur_str.."}"
+  str_tbl = inner(var)
+  if expanded then return concat(str_tbl) else return concat(str_tbl) end
 end
 
 rock._format = function (...)

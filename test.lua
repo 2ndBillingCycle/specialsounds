@@ -1,21 +1,33 @@
 --[[
 I would like this to be a nicer test runner.
 
-I think that'll require coroutines, as I'd like a running output, where each test section is printed, followed by a string of . for success and ❌ or ✗:
+I think that'll require coroutines, as I'd like a running output, where each test section is printed, followed by a string of . for success and ❌ or X:
 
 ```text
 test_lexer
-.........✗..✗......
+.........X..X......X
 test_parser
-...✗.......✗...
+...X.......X...
 
 results:
+
 test_lexer: 2
-case:
+
+input:
 "(error"
-👇
+
+error:
 Mismatched parenthesis error
 
+
+input:
+{key = "value"}
+
+output:
+{}
+
+expected error:
+str needs to be string
 ...
 ```
 
@@ -104,6 +116,31 @@ The full command is:
       {
         input={{[1]="value"}},
         output="{\n  [1] = \"value\",\n}",
+      },
+      {
+        input={{[1.1]="2"}},
+        output="{\n  [1.1] = \"2\",\n}",
+      },
+      {
+        input={{1,[1.1]="2",3}},
+        output="{ 1, nil, 3,\n  [1.1] = \"2\",\n}",
+      },
+      {
+        input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}}
+        output=
+[[{
+  1,
+  2,
+  3,
+  [1.1] = "a",
+  [{
+    1,
+    key = "value",
+  }] = {
+    1,
+    key = "value",
+  },
+}]],
       },
     },
   },
@@ -290,7 +327,7 @@ rock.perform_test = function (name, func, input, output)
   return "."
 end
 
-rock.test_isolated_functions = function ()
+rock.input_output_test = function ()
   -- For each case suite, run through the test cases, and perform the test
   for i,case in ipairs(rock.cases) do
     emit.print("Function: %s", case.name)
