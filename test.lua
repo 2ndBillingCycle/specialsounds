@@ -99,34 +99,34 @@ The full command is:
     cases = {
       {
         input={{1,2,3}},
-        output="{ 1, 2, 3, }",
+        output="{1, 2, 3}",
       },
       {
         input={{3,2,1}},
-        output="{ 3, 2, 1, }",
+        output="{3, 2, 1}",
       },
       {
         input={{1,nil,nil,4,5,nil}},
-        output="{ 1, nil, nil, 4, 5, }",
+        output="{1, nil, nil, 4, 5}",
       },
       {
         input={{key="value"}},
-        output="{\n  key = \"value\",\n}",
+        output="{key = \"value\"}",
       },
       {
         input={{[1]="value"}},
-        output="{\n  [1] = \"value\",\n}",
+        output="{\"value\"}",
       },
       {
         input={{[1.1]="2"}},
-        output="{\n  [1.1] = \"2\",\n}",
+        output="{[1.1] = \"2\"}",
       },
       {
         input={{1,[1.1]="2",3}},
-        output="{ 1, nil, 3,\n  [1.1] = \"2\",\n}",
+        output="{\n  1,\n  nil,\n  3,\n  [1.1] = \"2\",\n}",
       },
       {
-        input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}}
+        input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}},
         output=
 [[{
   1,
@@ -135,10 +135,10 @@ The full command is:
   [1.1] = "a",
   [{
     1,
-    key = "value",
+    key = "value"
   }] = {
     1,
-    key = "value",
+    key = "value"
   },
 }]],
       },
@@ -331,7 +331,7 @@ rock.perform_test = function (name, func, input, output)
   return "."
 end
 
-rock.input_output_test = function ()
+rock.input_output_tests = function ()
   -- For each case suite, run through the test cases, and perform the test
   for i,case in ipairs(rock.cases) do
     emit.print("Function: %s", case.name)
@@ -463,13 +463,12 @@ rock.run = function ()
       end
     end
   end
+  rock.input_output_tests()
   -- Turn pretty printing back on for test summaries; this could still error
   emit.pretty_printing = true
   local success, err = rock.summarize_test_results(rock.results)
   if not success then return success, "Error in test summarization" end
   return "tested"
 end
-
-if test then assert(rock.run()) end
 
 return rock

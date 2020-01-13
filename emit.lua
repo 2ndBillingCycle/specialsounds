@@ -3,11 +3,11 @@ local rock = {}
 local header = require "header"
 
 rock.debug = function (str)
-  if type(str) ~= "string" then
-    -- do nothing
-  else
-    print(str)
-  end
+  --if type(str) ~= "string" then
+  --  -- do nothing
+  --else
+  --  print(str)
+  --end
 end
 
 rock.member = function (var, tbl)
@@ -57,12 +57,12 @@ rock.to_string = function (var)
         new_tbl[#new_tbl + 1] = "{"
       elseif val == close then
         new_tbl[#new_tbl + 1] = "}"
-        if str_tbl[i + 2] ~= close
-          and str_tbl[i + 1] ~= bkey_end
-          and str_tbl[i + 2] ~= nil
-          then
-          new_tbl[#new_tbl + 1] = ","
-        end
+        --if str_tbl[i + 2] ~= close
+        --  and str_tbl[i + 1] ~= bkey_end
+        --  and str_tbl[i + 2] ~= nil
+        --  then
+        --  new_tbl[#new_tbl + 1] = ","
+        --end
       elseif val == skey_start then
         -- drop
       elseif val == skey_end then
