@@ -19,43 +19,82 @@ rock.string_repr = function (str)
 end
 
 rock.to_string = function (var)
-  local expanded = false
-  local open = 1
-  local close = 2
-  local key_start = 3
-  local key_end = 4
-  local val_start = 5
-  local val_end = 6
-  local nil_val = 7
+  local expanded   = false
+  local open       = 1
+  local close      = 2
+  local skey_start = 3
+  local skey_end   = 4
+  local val_start  = 5
+  local val_end    = 6
+  local nil_val    = 7
   local sval_start = 8
-  local sval_end = 9
+  local sval_end   = 9
+  local bkey_start = 12
+  local bkey_end   = 13
 
-  local concat = function (str_tbl)
-    local concatted = ""
+  local translate = function (str_tbl)
+    local new_tbl = {}
     for i,val in ipairs(str_tbl) do
       if val == open then
-        concatted = concatted.."{"
+        new_tbl[#new_tbl + 1] = "{"
       elseif val == close then
-        concatted = concatted:gsub(", ?$", "").."},"
-      elseif val == key_start then
-        -- Do nothing
-      elseif val == key_end then
-        concatted = concatted.." = "
+        new_tbl[#new_tbl + 1] = "}"
+        if str_tbl[i + 2] ~= close
+          and str_tbl[i + 1] ~= bkey_end
+          and str_tbl[i + 2] ~= nil
+          then
+          new_tbl[#new_tbl + 1] = ","
+        end
+      elseif val == skey_start then
+        -- drop
+      elseif val == skey_end then
+        new_tbl[#new_tbl + 1] = " = "
       elseif val == val_start then
-        -- Do nothing
+        -- drop
       elseif val == val_end then
-        concatted = concatted..", "
+        if str_tbl[i + 1] ~= close then
+          new_tbl[#new_tbl + 1] = ","
+        else
+          -- drop
+        end
       elseif val == nil_val then
-        concatted = concatted.."nil"
+        -- nil can't be a key, only a value
+        new_tbl[#new_tbl + 1] = "nil"
+        if str_tbl[i + 1] ~= close then
+          new_tbl[#new_tbl + 1] = ","
+        end
       elseif val == sval_start then
-        -- Do nothing
+        -- drop
       elseif val == sval_end then
-        concatted = concatted..", "
+        if str_tbl[i + 1] ~= close then
+          new_tbl[#new_tbl + 1] = ","
+        else
+          -- drop
+        end
+      elseif val == bkey_start then
+        new_tbl[#new_tbl + 1] = "["
+      elseif val == bkey_end then
+        new_tbl[#new_tbl + 1] = "] = "
       else
-        concatted = concatted..val
+        new_tbl[#new_tbl + 1] = val
       end
     end
-    return concatted:gsub(",$","")
+    return new_tbl
+  end
+
+  local concat = function (str_tbl)
+    str_tbl = translate(str_tbl)
+    local concatted = ""
+    for i,val in ipairs(str_tbl) do
+      if val == "," then
+        concatted = concatted..", "
+      elseif type(val) == "string" then
+        concatted = concatted..val
+      else
+        error("val in str_tbl not a string: "..tostring(val))
+      end
+    end
+    return concatted
   end
 
   local expand = function (str_tbl)
@@ -64,31 +103,20 @@ rock.to_string = function (var)
     local indent_step = 2
     local indent_char = " "
     for i,val in ipairs(str_tbl) do
-      if val == open then
-        print(indent_level)
-        concatted = concatted..string.rep(indent_char, indent_level)
+      if val == "{" then
         concatted = concatted.."{\n"
         indent_level = indent_level + indent_step
-      elseif val == close then
+        concatted = concatted..string.rep(indent_char, indent_level)
+      elseif val == "}" then
+        concatted = concatted.."\n"
         indent_level = indent_level - indent_step
-        concatted = concatted..string.rep(indent_char, indent_level)
-        concatted = concatted.."},\n"
-      elseif val == key_start then
-        concatted = concatted..string.rep(indent_char, indent_level)
-      elseif val == key_end then
-        concatted = concatted.." = "
-      elseif val == val_start then
-        -- Do nothing
-      elseif val == val_end then
-        concatted = concatted..",\n"
-      elseif val == nil_val then
-        concatted = concatted.."nil"
-      elseif val == sval_start then
-        concatted = concatted..string.rep(indent_char, indent_level)
-      elseif val == sval_end then
-        concatted = concatted..",\n"
-      else
+        concatted = concatted..string.rep(indent_char, indent_level).."}"
+      elseif val == "," then
+        concatted = concatted..",\n"..string.rep(indent_char, indent_level)
+      elseif type(val) == "string" then
         concatted = concatted..val
+      else
+        error("Bad value in str_tbl: "..tostring(val))
       end
     end
     return concatted:gsub(",?\n?$","")
@@ -106,6 +134,7 @@ rock.to_string = function (var)
     for key, value in pairs(var) do
       if tostring(key):match("^%d+$") then
         indices[#indices + 1] = key
+        if key < 1 then error("index out of range: "..tostring(key)) end
       else
         keys[#keys + 1] = key
       end
@@ -119,7 +148,7 @@ rock.to_string = function (var)
     -- n={-9, nil, [t]=t,[1.1]=0,[io.stdin]=2,}
     -- All of the keys for table n will be a natural number [1,inf)
     local maxn = 0 -- ensures that `for i=1,0 never runs`
-    if #indices > 1 then
+    if #indices > 0 then
       maxn = indices[#indices]
     end
     cur_str[#cur_str + 1] = open
@@ -143,29 +172,30 @@ rock.to_string = function (var)
     end
     for i,key in ipairs(keys) do
       local val = var[key]
+      if not val then error("nil val from keys table") end
       if #indices > 0 or i > 1 then expanded = true end
-      cur_str[#cur_str + 1] = key_start
       if type(key) == "string" then
+        cur_str[#cur_str + 1] = skey_start
         cur_str[#cur_str + 1] = key
+        cur_str[#cur_str + 1] = skey_end
       elseif type(key) == "table" and not rock.member(key, seen_tables) then
         table.insert(seen_tables, key)
-        cur_str[#cur_str + 1] = "["
-        inner(var, cur_str, seen_tables)
-        cur_str[#cur_str + 1] = "]"
+        cur_str[#cur_str + 1] = bkey_start
+        inner(key, cur_str, seen_tables)
+        cur_str[#cur_str + 1] = bkey_end
       elseif type(key) == "table" then
-        cur_str[#cur_str + 1] = "["
+        cur_str[#cur_str + 1] = bkey_start
         cur_str[#cur_str + 1] = tostring(key).." (seen)"
-        cur_str[#cur_str + 1] = "]"
+        cur_str[#cur_str + 1] = bkey_end
       else
-        cur_str[#cur_str + 1] = "["
+        cur_str[#cur_str + 1] = bkey_start
         cur_str[#cur_str + 1] = tostring(key)
-        cur_str[#cur_str + 1] = "]"
+        cur_str[#cur_str + 1] = bkey_end
       end
-      cur_str[#cur_str + 1] = key_end
       cur_str[#cur_str + 1] = val_start
-      if type(val) == "table" and not rock.member(key, seen_tables) then
+      if type(val) == "table" and not rock.member(val, seen_tables) then
         table.insert(seen_tables, val)
-        inner(var, cur_str, seen_tables)
+        inner(val, cur_str, seen_tables)
       elseif type(val) == "table" then
         cur_str[#cur_str + 1] = tostring(val).." (seen)"
       elseif type(val) == "string" then
@@ -180,7 +210,8 @@ rock.to_string = function (var)
   end
   
   str_tbl = inner(var)
-  if expanded then return concat(str_tbl) else return concat(str_tbl) end
+  --if expanded then return expand(str_tbl) else return concat(str_tbl) end
+  return expand(translate(str_tbl))
 end
 
 rock._format = function (...)
