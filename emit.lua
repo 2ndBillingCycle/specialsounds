@@ -2,6 +2,14 @@ local rock = {}
 -- Import header
 local header = require "header"
 
+rock.debug = function (str)
+  if type(str) ~= "string" then
+    -- do nothing
+  else
+    print(str)
+  end
+end
+
 rock.member = function (var, tbl)
   -- Checks if var is an element of array tbl
   if type(tbl) ~= "table" then error("tbl not table") end
@@ -9,6 +17,16 @@ rock.member = function (var, tbl)
     if val == var then return true end
   end
   return false
+end
+
+rock.clear = function (seen, tbls)
+  -- Sets all the keys in the dict seen that are tables also in the array tbl to nil
+  if type(seen) ~= "table" or type(tbls) ~= "table" then
+    error("both arguments must be tables")
+  end
+  for i,tbl in ipairs(tbls) do
+    seen[tbl] = nil
+  end
 end
 
 rock.string_repr = function (str)
@@ -54,6 +72,7 @@ rock.to_string = function (var)
       elseif val == val_end then
         if str_tbl[i + 1] ~= close then
           new_tbl[#new_tbl + 1] = ","
+          rock.debug(",")
         else
           -- drop
         end
@@ -151,67 +170,93 @@ rock.to_string = function (var)
     if #indices > 0 then
       maxn = indices[#indices]
     end
+    rock.debug("open")
     cur_str[#cur_str + 1] = open
     for i=1,maxn do
+      rock.debug("sval_start")
       cur_str[#cur_str + 1] = sval_start
       if indices[i] ~= i then
+        rock.debug("nil_val")
         cur_str[#cur_str + 1] = nil_val
         -- Doesn't matter what we insert, we just want to push the rest of the values over
         table.insert(indices, i, i)
-      elseif type(var[i]) == "table" and not rock.member(var[i], seen_tables) then
-        table.insert(seen_tables, var[i])
+      elseif type(var[i]) == "table" and not seen_tables[var[i]] then
+        rock.debug("inner")
+        seen_tables[var[i]] = true
         inner(var[i], cur_str, seen_tables)
       elseif type(var[i]) == "table" then
+        rock.debug("seen")
         cur_str[#cur_str + 1] = tostring(var[i]).." (seen)"
       elseif type(var[i]) == "string" then
+        rock.debug("string")
         cur_str[#cur_str + 1] = "\""..var[i].."\""
       else
+        rock.debug("val")
         cur_str[#cur_str + 1] = tostring(var[i])
       end
+      rock.debug("sval_end")
       cur_str[#cur_str + 1] = sval_end
     end
     for i,key in ipairs(keys) do
       local val = var[key]
       if not val then error("nil val from keys table") end
-      if #indices > 0 or i > 1 then expanded = true end
+      if #indices > 0 or i > 1 then rock.debug("set expanded") expanded = true end
       if type(key) == "string" then
+        rock.debug("skey_start/end")
         cur_str[#cur_str + 1] = skey_start
         cur_str[#cur_str + 1] = key
         cur_str[#cur_str + 1] = skey_end
-      elseif type(key) == "table" and not rock.member(key, seen_tables) then
-        table.insert(seen_tables, key)
+      elseif type(key) == "table" and not seen_tables[key] then
+        seen_tables[key] = true
+        rock.debug("bkey_start")
         cur_str[#cur_str + 1] = bkey_start
+        rock.debug("inner")
         inner(key, cur_str, seen_tables)
+        rock.debug("bkey_end")
         cur_str[#cur_str + 1] = bkey_end
       elseif type(key) == "table" then
+        rock.debug("inserted seen table key")
+        rock.debug("bkey_start")
         cur_str[#cur_str + 1] = bkey_start
+        rock.debug("seen")
         cur_str[#cur_str + 1] = tostring(key).." (seen)"
+        rock.debug("bkey_end")
         cur_str[#cur_str + 1] = bkey_end
       else
+        rock.debug("inserted regular key")
+        rock.debug("bkey_start")
         cur_str[#cur_str + 1] = bkey_start
+        rock.debug("val")
         cur_str[#cur_str + 1] = tostring(key)
+        rock.debug("bkey_end")
         cur_str[#cur_str + 1] = bkey_end
       end
+      rock.debug("val_start")
       cur_str[#cur_str + 1] = val_start
-      if type(val) == "table" and not rock.member(val, seen_tables) then
-        table.insert(seen_tables, val)
+      if type(val) == "table" and not seen_tables[val] then
+        rock.debug("inner")
+        seen_tables[val] = true
         inner(val, cur_str, seen_tables)
       elseif type(val) == "table" then
+        rock.debug("seen")
         cur_str[#cur_str + 1] = tostring(val).." (seen)"
       elseif type(val) == "string" then
+        rock.debug("string")
         cur_str[#cur_str + 1] = "\""..val.."\""
       else
+        rock.debug("val")
         cur_str[#cur_str + 1] = tostring(val)
       end
+      rock.debug("val_end")
       cur_str[#cur_str + 1] = val_end
     end
+    rock.debug("close")
     cur_str[#cur_str + 1] = close
     return cur_str
   end
   
-  str_tbl = inner(var)
-  --if expanded then return expand(str_tbl) else return concat(str_tbl) end
-  return expand(translate(str_tbl))
+  str_tbl = translate(inner(var))
+  if expanded then return expand(str_tbl) else return concat(str_tbl) end
 end
 
 rock._format = function (...)
