@@ -37,7 +37,17 @@ rock.string_repr = function (str)
 end
 
 rock.to_string = function (var)
+  -- Should behave exactly like the builtin tostring() function,
+  -- except will also pretty-print tables
+  -- NOTE: Currently nested tables referencing themselves, or other
+  -- cyclical references are giving me trouble; will leave looking
+  -- at graph theory and loop detection for later
+
+  -- Set to true to indicate expand() rules should be used instead
+  -- of concat()
   local expanded   = false
+
+  -- NOTE: How would it be best to implement an Enum?
   local open       = 1
   local close      = 2
   local skey_start = 3
@@ -47,8 +57,8 @@ rock.to_string = function (var)
   local nil_val    = 7
   local sval_start = 8
   local sval_end   = 9
-  local bkey_start = 12
-  local bkey_end   = 13
+  local bkey_start = 10
+  local bkey_end   = 11
 
   local translate = function (str_tbl)
     local new_tbl = {}
@@ -189,7 +199,7 @@ rock.to_string = function (var)
         cur_str[#cur_str + 1] = tostring(var[i]).." (seen)"
       elseif type(var[i]) == "string" then
         rock.debug("string")
-        cur_str[#cur_str + 1] = "\""..var[i].."\""
+        cur_str[#cur_str + 1] = rock.string_repr(var[i])
       else
         rock.debug("val")
         cur_str[#cur_str + 1] = tostring(var[i])
@@ -242,7 +252,7 @@ rock.to_string = function (var)
         cur_str[#cur_str + 1] = tostring(val).." (seen)"
       elseif type(val) == "string" then
         rock.debug("string")
-        cur_str[#cur_str + 1] = "\""..val.."\""
+        cur_str[#cur_str + 1] = rock.string_repr(val)
       else
         rock.debug("val")
         cur_str[#cur_str + 1] = tostring(val)

@@ -319,6 +319,9 @@ rock.perform_test = function (name, func, input, output)
                             )}
   end
   results.print = get_output()
+  -- We do the comparison here as we want to be able to print out a running line of ...x...XO..
+  -- NOTE: It'd be ideal to not have errors from compare_output() be mixed in with errors from
+  -- running the test, but I guess those errors would show up in the xpcall()
   results.comparison, results.err = rock.compare_output(output, results.result)
   if results.comparison then
     emit.write(".") 
@@ -346,14 +349,14 @@ rock.input_output_tests = function ()
         output = true -- Default is to test if the function returns a truthy value
       end
 
-      local result, err = rock.perform_test(
+      local check, err = rock.perform_test(
         case.name,
         case.func,
         input,
         output
       )
 
-      if not result then
+      if not check then
         -- Store an error string in place of the result table
         rock.add_result(
           case.name,
@@ -364,8 +367,7 @@ rock.input_output_tests = function ()
           nil,
           err
         )
-        --emit.write("X")
-        emit.write("O")
+        emit.write("O") -- Indicate a predictable error in the test functions
       end
     end
     emit.write("\n")
