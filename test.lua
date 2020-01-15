@@ -123,7 +123,7 @@ The full command is:
       },
       {
         input={{1,[1.1]="2",3}},
-        output="{\n  1,\n  nil,\n  3,\n  [1.1] = \"2\",\n}",
+        output="{\n  1,\n  3,\n  [1.1] = \"2\"\n}",
       },
       {
         input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}},
@@ -139,12 +139,16 @@ The full command is:
   }] = {
     1,
     key = "value"
-  },
+  }
 }]],
       },
       {
         input={{[{1,2}]={1,2}}},
         output="{[{1, 2}] = {1, 2}}",
+      },
+      {
+        input={{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}},
+        output="{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}",
       },
     },
   },

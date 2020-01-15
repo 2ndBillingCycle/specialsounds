@@ -1,6 +1,7 @@
 local rock = {}
 -- Import header
 local header = require "header"
+rock.trailing_commas = false
 
 rock.debug = function (str)
   --if type(str) ~= "string" then
@@ -33,7 +34,8 @@ rock.string_repr = function (str)
   if type(str) ~= "string" then
     return str
   end
-  return "\""..str:gsub("\n","\\n").."\""
+  return "\""..str:gsub("\n","\\n")
+                  :gsub("\"","\\\"").."\""
 end
 
 rock.to_string = function (var)
@@ -42,81 +44,41 @@ rock.to_string = function (var)
   -- NOTE: Currently nested tables referencing themselves, or other
   -- cyclical references are giving me trouble; will leave looking
   -- at graph theory and loop detection for later
+  -- > a={}
+  -- > b={}
+  -- > a[1]=b
+  -- > b[1]=a
+  -- > =a
+  -- table: 0x56418bcb3490
+  -- > =b
+  -- table: 0x56418bcb6600
+  -- > =a[1]
+  -- table: 0x56418bcb6600
+  -- > =a[1][1]
+  -- table: 0x56418bcb3490
+  -- > =a[1][1][1][1][1]
+  -- table: 0x56418bcb6600
+  -- > =a[1][1][1][1][1][1]
+  -- table: 0x56418bcb3490
+  -- > =b[1]
+  -- table: 0x56418bcb3490
+  -- > =b[1][1]
+  -- table: 0x56418bcb6600
 
   -- Set to true to indicate expand() rules should be used instead
   -- of concat()
   local expanded   = false
 
-  -- NOTE: How would it be best to implement an Enum?
-  local open       = 1
-  local close      = 2
-  local skey_start = 3
-  local skey_end   = 4
-  local val_start  = 5
-  local val_end    = 6
-  local nil_val    = 7
-  local sval_start = 8
-  local sval_end   = 9
-  local bkey_start = 10
-  local bkey_end   = 11
-
-  local translate = function (str_tbl)
-    local new_tbl = {}
-    for i,val in ipairs(str_tbl) do
-      if val == open then
-        new_tbl[#new_tbl + 1] = "{"
-      elseif val == close then
-        new_tbl[#new_tbl + 1] = "}"
-        --if str_tbl[i + 2] ~= close
-        --  and str_tbl[i + 1] ~= bkey_end
-        --  and str_tbl[i + 2] ~= nil
-        --  then
-        --  new_tbl[#new_tbl + 1] = ","
-        --end
-      elseif val == skey_start then
-        -- drop
-      elseif val == skey_end then
-        new_tbl[#new_tbl + 1] = " = "
-      elseif val == val_start then
-        -- drop
-      elseif val == val_end then
-        if str_tbl[i + 1] ~= close then
-          new_tbl[#new_tbl + 1] = ","
-          rock.debug(",")
-        else
-          -- drop
-        end
-      elseif val == nil_val then
-        -- nil can't be a key, only a value
-        new_tbl[#new_tbl + 1] = "nil"
-        if str_tbl[i + 1] ~= close then
-          new_tbl[#new_tbl + 1] = ","
-        end
-      elseif val == sval_start then
-        -- drop
-      elseif val == sval_end then
-        if str_tbl[i + 1] ~= close then
-          new_tbl[#new_tbl + 1] = ","
-        else
-          -- drop
-        end
-      elseif val == bkey_start then
-        new_tbl[#new_tbl + 1] = "["
-      elseif val == bkey_end then
-        new_tbl[#new_tbl + 1] = "] = "
-      else
-        new_tbl[#new_tbl + 1] = val
-      end
-    end
-    return new_tbl
-  end
-
   local concat = function (str_tbl)
-    str_tbl = translate(str_tbl)
     local concatted = ""
     for i,val in ipairs(str_tbl) do
       if val == "," then
-        concatted = concatted..", "
+        -- This needs to be in an inner block, as "}" is still a string, and if the above
+        -- if statement evaluates to false, this if..elseif chain will fall through to the
+        -- next, which will succeed, and the comma will be added
+        if rock.trailing_commas or str_tbl[i + 1] ~= "}" then
+          concatted = concatted..", "
+        end
       elseif type(val) == "string" then
         concatted = concatted..val
       else
@@ -141,14 +103,19 @@ rock.to_string = function (var)
         indent_level = indent_level - indent_step
         concatted = concatted..string.rep(indent_char, indent_level).."}"
       elseif val == "," then
-        concatted = concatted..",\n"..string.rep(indent_char, indent_level)
+        if rock.trailing_commas or str_tbl[i + 1] ~= "}" then
+          concatted = concatted..",\n"..string.rep(indent_char, indent_level)
+        end
       elseif type(val) == "string" then
         concatted = concatted..val
       else
         error("Bad value in str_tbl: "..tostring(val))
       end
     end
-    return concatted:gsub(",?\n?$","")
+    -- On its own line so the second return value of string.gsub doesn't
+    -- also get returned
+    local str = concatted:gsub(",?\n?$","")
+    return str
   end
 
   local function inner (var, cur_str, seen_tables)
@@ -180,92 +147,57 @@ rock.to_string = function (var)
     if #indices > 0 then
       maxn = indices[#indices]
     end
-    rock.debug("open")
-    cur_str[#cur_str + 1] = open
+    cur_str[#cur_str + 1] = "{"
     for i=1,maxn do
-      rock.debug("sval_start")
-      cur_str[#cur_str + 1] = sval_start
       if indices[i] ~= i then
-        rock.debug("nil_val")
-        cur_str[#cur_str + 1] = nil_val
+        cur_str[#cur_str + 1] = "nil"
         -- Doesn't matter what we insert, we just want to push the rest of the values over
         table.insert(indices, i, i)
       elseif type(var[i]) == "table" and not seen_tables[var[i]] then
-        rock.debug("inner")
         seen_tables[var[i]] = true
         inner(var[i], cur_str, seen_tables)
       elseif type(var[i]) == "table" then
-        rock.debug("seen")
         cur_str[#cur_str + 1] = tostring(var[i]).." (seen)"
       elseif type(var[i]) == "string" then
-        rock.debug("string")
         cur_str[#cur_str + 1] = rock.string_repr(var[i])
       else
-        rock.debug("val")
         cur_str[#cur_str + 1] = tostring(var[i])
       end
-      rock.debug("sval_end")
-      cur_str[#cur_str + 1] = sval_end
+      cur_str[#cur_str + 1] = ","
     end
     for i,key in ipairs(keys) do
       local val = var[key]
       if not val then error("nil val from keys table") end
       if #indices > 0 or i > 1 then rock.debug("set expanded") expanded = true end
       if type(key) == "string" then
-        rock.debug("skey_start/end")
-        cur_str[#cur_str + 1] = skey_start
-        cur_str[#cur_str + 1] = key
-        cur_str[#cur_str + 1] = skey_end
+        cur_str[#cur_str + 1] = key.." = "
       elseif type(key) == "table" and not seen_tables[key] then
         seen_tables[key] = true
-        rock.debug("bkey_start")
-        cur_str[#cur_str + 1] = bkey_start
-        rock.debug("inner")
+        cur_str[#cur_str + 1] = "["
         inner(key, cur_str, seen_tables)
-        rock.debug("bkey_end")
-        cur_str[#cur_str + 1] = bkey_end
+        cur_str[#cur_str + 1] = "] = "
       elseif type(key) == "table" then
-        rock.debug("inserted seen table key")
-        rock.debug("bkey_start")
-        cur_str[#cur_str + 1] = bkey_start
-        rock.debug("seen")
-        cur_str[#cur_str + 1] = tostring(key).." (seen)"
-        rock.debug("bkey_end")
-        cur_str[#cur_str + 1] = bkey_end
+        cur_str[#cur_str + 1] = "["..tostring(key).." (seen)] = "
       else
-        rock.debug("inserted regular key")
-        rock.debug("bkey_start")
-        cur_str[#cur_str + 1] = bkey_start
-        rock.debug("val")
-        cur_str[#cur_str + 1] = tostring(key)
-        rock.debug("bkey_end")
-        cur_str[#cur_str + 1] = bkey_end
+        cur_str[#cur_str + 1] = "["..tostring(key).."] = "
       end
-      rock.debug("val_start")
-      cur_str[#cur_str + 1] = val_start
       if type(val) == "table" and not seen_tables[val] then
-        rock.debug("inner")
         seen_tables[val] = true
         inner(val, cur_str, seen_tables)
       elseif type(val) == "table" then
-        rock.debug("seen")
         cur_str[#cur_str + 1] = tostring(val).." (seen)"
       elseif type(val) == "string" then
-        rock.debug("string")
         cur_str[#cur_str + 1] = rock.string_repr(val)
       else
-        rock.debug("val")
         cur_str[#cur_str + 1] = tostring(val)
       end
-      rock.debug("val_end")
-      cur_str[#cur_str + 1] = val_end
+      cur_str[#cur_str + 1] = ","
     end
-    rock.debug("close")
-    cur_str[#cur_str + 1] = close
+    cur_str[#cur_str + 1] = "}"
     return cur_str
   end
   
-  str_tbl = translate(inner(var))
+  str_tbl = inner(var)
   if expanded then return expand(str_tbl) else return concat(str_tbl) end
 end
 
