@@ -65,9 +65,17 @@ rock.to_string = function (var)
   -- > =b[1][1]
   -- table: 0x56418bcb6600
 
-  -- Set to true to indicate expand() rules should be used instead
+  -- Bail out early if not tables
+  -- tostring(nil) -> nil
+  -- This used to be the check for nil, but would also catch false:
+  -- if not var then return "nil"
+  if var == "nil" then return "nil"
+  elseif type(var) ~= "table" then return tostring(var)
+  end
+
+  -- Global flag to keep track of when expand() should be used instead
   -- of concat()
-  local expanded   = false
+  local expanded = false
 
   local concat = function (str_tbl)
     local concatted = ""
@@ -119,9 +127,6 @@ rock.to_string = function (var)
   end
 
   local function inner (var, cur_str, seen_tables)
-    if not var then return {"nil"}
-    elseif type(var) ~= "table" then return {tostring(var)}
-    end
     if not cur_str then cur_str = {} end
     if not seen_tables then seen_tables = {} end
     

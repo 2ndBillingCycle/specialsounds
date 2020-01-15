@@ -98,16 +98,25 @@ The full command is:
     func=emit.to_string,
     cases = {
       {
-        input={{1,2,3}},
+        input={{1, 2, 3}},
         output="{1, 2, 3}",
       },
       {
-        input={{3,2,1}},
-        output="{3, 2, 1}",
+        input={{[{}] = -0.01, [1.1] = "\n", {key = "value"}}},
+        output=
+-- NOTE: The spaces indenting a nonexistent value in the key
+-- that's an empty table are undesired
+[[{
+  {
+    key = "value"
+  },
+  [{}] = -0.01,
+  [1.1] = "\n"
+}]],
       },
       {
-        input={{1,nil,nil,4,5,nil}},
-        output="{1, nil, nil, 4, 5}",
+        input={{-91,nil,nil,400,.0,nil}},
+        output="{-91, nil, nil, 400, 0}",
       },
       {
         input={{key="value"}},
