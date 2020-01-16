@@ -308,6 +308,33 @@ rock.record = function (...)
   return message
 end
 
+rock.read_only = function (tbl)
+  -- Make sure returned table is read only so nested callers can't
+  -- manipulate record entries
+  --
+  -- Use the recipe from: https://www.lua.org/pil/13.4.5.html
+  local proxy = {}
+  local mt = {       -- create metatable
+    __index = t,
+    __newindex = function (t,k,v)
+      error("attempt to update a read-only table", 2)
+    end
+  }
+  setmetatable(proxy, mt)
+  return proxy
+end
+
+rock.copy = function (tbl)
+  -- Make a copy of the input table
+  -- It's very bad, I know:
+  -- It's for use with record_output();
+  -- don't sue me
+  if type(tbl) ~= "table" then error("can only copy tables") end
+  local new_tbl = {}
+  for k,v in pairs(tbl) do new_tbl[k]=v end
+  return new_tbl
+end
+
 rock.set_record = function ()
   rock.err = rock.record
   rock.info = rock.record
@@ -357,8 +384,13 @@ rock.record_output = function()
   end
   
   local get_records = function ()
+    -- Don't clear records, so that calls to record() and subsequent
+    -- get_records() can be made without clearing the records seen by
+    -- outter calls.
+    -- Records should only be cleared after the outermost get_records
+    -- has been called, and a new record_output is called.
     rock.unset_record()
-    return rock.records
+    return rock.copy(rock.records)
   end
   return get_records
 end

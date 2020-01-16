@@ -245,7 +245,7 @@ Desired is either true, or the output key in a test case:
 --]]
   -- received output must always be a table
   if type(received) ~= "table" then error("received not table") end
-  -- Did pcall catch an error?
+  -- Did xpcall catch an error?
   if not received[1] then
     return false
   end
@@ -279,8 +279,8 @@ end
    --   }
 rock.results = {}
 
-rock.add_result = function (name, func, input, output, result, comparison, err)
-  local last_result = rock.results[ #(rock.results) ]
+rock.add_result = function (name, func, input, output, result, print, comparison, err)
+  local last_result = rock.results[ #rock.results ]
   if type(last_result) == "table" and
      last_result.name == name and
      last_result.func == func and
@@ -292,19 +292,43 @@ rock.add_result = function (name, func, input, output, result, comparison, err)
      type(last_result.output) ~= "nil" then
 
     last_result.result = result
+    last_result.print = print
     last_result.comparison = comparison
     last_result.err = err
   else
     table.insert(rock.results, {
       name=name,
-      funcfunc,
+      func=func,
       input=input,
       output=output,
-      result=nil,
-      comparison=nil,
+      result=result,
+      print=print,
+      comparison=comparison,
       err=tostring(err),
     })
   end
+end
+
+rock.test_simple_pass = function ()
+  return true
+end
+
+rock.test_simple_fail = function ()
+  return false
+end
+
+rock.test_simple_error = function ()
+  error("This error is intentional")
+end
+
+rock.test_expected_fail = function ()
+  local f_err, result, err = pcall(rock.test_simple_fail)
+  return err ~= "This error is intentional"
+end
+
+rock.test_expected_err = function ()
+  local f_err, result, err = pcall(rock.test_simple_error)
+  return not f_err and result:match("This error is intentional")
 end
 
 rock.perform_test = function (name, func, input, output)
@@ -394,10 +418,11 @@ rock.summarize_test_results = function (test_results)
   local pass = {}
   local fail = {}
   local errs = {}
-  local name = ""
   for i,result in ipairs(rock.results) do
-    if result.name ~= name then
-      name = result.name
+    local name = result.name
+    -- If the name hasn't been seen yet, set its pass, fail, and err
+    -- counts to 0
+    if not pass[name] then
       pass[name] = 0
       fail[name] = 0
       errs[name] = 0
@@ -405,7 +430,7 @@ rock.summarize_test_results = function (test_results)
     end
     if result.err ~= nil then
       emit.print(
-        [[
+[[
 Error in test:
 input:
 %s
@@ -415,10 +440,10 @@ error:
         result.input,
         result.err
       )
-      errs[name]  = errs[name] + 1
-    elseif result.comparison ~= true then
+      errs[name] = errs[name] + 1
+    elseif result.comparison ~= nil and not result.comparison then
       emit.print(
-        [[
+[[
 Test failure:
 input:
 %s
@@ -460,24 +485,40 @@ rock.run = function ()
   -- would make finding the error in emit.to_string more difficult
   emit.pretty_printing = false
   -- Find functions in this module that start with test_ and run them
+  emit.print("unit tests:")
   for name,func in pairs(rock) do
     if name:match("^test_.+") then
-      emit.print(name)
-      local result, err = xpcall(func, debug.traceback)
-      if not result then
-        rock.add_result(
-          name,
-          func,
-          input,
-          output,
-          result,
-          comparison,
-          err
-        )
-        emit.write("X\n")
+      local results = {
+        name=name,
+        func=func,
+   --     input="input argument(s)",
+   --     output="desired output",
+   --     result={func(input)},
+   --     print={"printed string"},
+   --     comparison=rock.compare_output(output, result),
+   --     err="error string returned by test runner itself; may be nil if no error",
+
+      }
+      local get_records = emit.record_output()
+      results.result = {xpcall(
+                                function ()
+                                  return func(results)
+                                end,
+                                debug.traceback
+                       )}
+      results.print = get_records()
+      if not results.result[1] then
+        emit.write("X")
+      elseif not results.result[2] then
+        emit.write("x")
+      else
+        emit.write(".")
       end
+      rock.results[ #rock.results + 1] = results
     end
   end
+  emit.write("\n")
+  emit.print("input/output tests:")
   rock.input_output_tests()
   -- Turn pretty printing back on for test summaries; this could still error
   emit.pretty_printing = true
