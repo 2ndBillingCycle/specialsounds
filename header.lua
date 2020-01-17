@@ -1,5 +1,16 @@
 local rock = {}
 
+rock.copy = function (tbl)
+  -- Make a copy of the input table
+  -- It's very bad, I know:
+  -- It's for use with record_output();
+  -- don't sue me
+  if type(tbl) ~= "table" then error("can only copy tables") end
+  local new_tbl = {}
+  for k,v in pairs(tbl) do new_tbl[k]=v end
+  return new_tbl
+end
+
 ---[==[ Mock hexchat table
 if not hexchat then
   hexchat = {}

@@ -46,6 +46,7 @@ NOTE: Test runner does not yet isolate tests; subsequent cases will see the stat
 
 local rock = {}
 
+local header = require "header"
 local emit = require "emit"
 
 rock.cases = {
@@ -428,7 +429,7 @@ rock.summarize_test_results = function (test_results)
       errs[name] = 0
       emit.print("Results for %s\n", name)
     end
-    if result.err ~= nil then
+    if result.err ~= nil and result.err then
       emit.print(
 [[
 Error in test:
@@ -437,7 +438,7 @@ input:
 error:
 %s
 ]],
-        result.input,
+        result.input or "",
         result.err
       )
       errs[name] = errs[name] + 1
@@ -452,9 +453,9 @@ output:
 pass output:
 %s
 ]],
-        result.input,
+        result.input or "",
         result.result,
-        result.output
+        result.output or ""
       )
       fail[name] = fail[name] + 1
     else
@@ -507,12 +508,19 @@ rock.run = function ()
                                 debug.traceback
                        )}
       results.print = get_records()
-      if not results.result[1] then
+      results.err = not results.result[1]
+      results.input = ""
+      results.output = table.remove(header.copy(results.result), 1)
+      if results.err then
+        results.comparison = false
         emit.write("X")
-      elseif not results.result[2] then
-        emit.write("x")
       else
-        emit.write(".")
+        results.comparison = results.result[2] and true or false
+        if not results.comparison then
+          emit.write("x")
+        else
+          emit.write(".")
+        end
       end
       rock.results[ #rock.results + 1] = results
     end
@@ -522,6 +530,7 @@ rock.run = function ()
   rock.input_output_tests()
   -- Turn pretty printing back on for test summaries; this could still error
   emit.pretty_printing = true
+  emit.print(rock.results)
   local success, err = rock.summarize_test_results(rock.results)
   if not success then return success, "Error in test summarization" end
   return "tested"

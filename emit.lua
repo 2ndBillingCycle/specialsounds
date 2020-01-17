@@ -172,7 +172,7 @@ rock.to_string = function (var)
     end
     for i,key in ipairs(keys) do
       local val = var[key]
-      if not val then error("nil val from keys table") end
+      if val == nil then error("nil val from keys table") end
       if #indices > 0 or i > 1 then rock.debug("set expanded") expanded = true end
       if type(key) == "string" then
         cur_str[#cur_str + 1] = key.." = "
@@ -324,17 +324,6 @@ rock.read_only = function (tbl)
   return proxy
 end
 
-rock.copy = function (tbl)
-  -- Make a copy of the input table
-  -- It's very bad, I know:
-  -- It's for use with record_output();
-  -- don't sue me
-  if type(tbl) ~= "table" then error("can only copy tables") end
-  local new_tbl = {}
-  for k,v in pairs(tbl) do new_tbl[k]=v end
-  return new_tbl
-end
-
 rock.set_record = function ()
   rock.err = rock.record
   rock.info = rock.record
@@ -390,7 +379,7 @@ rock.record_output = function()
     -- Records should only be cleared after the outermost get_records
     -- has been called, and a new record_output is called.
     rock.unset_record()
-    return rock.copy(rock.records)
+    return header.copy(rock.records)
   end
   return get_records
 end
