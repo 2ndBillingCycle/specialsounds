@@ -11,15 +11,6 @@ rock.debug = function (str)
   --end
 end
 
-rock.member = function (var, tbl)
-  -- Checks if var is an element of array tbl
-  if type(tbl) ~= "table" then error("tbl not table") end
-  for i,val in ipairs(tbl) do
-    if val == var then return true end
-  end
-  return false
-end
-
 rock.clear = function (seen, tbls)
   -- Sets all the keys in the dict seen that are tables also in the array tbl to nil
   if type(seen) ~= "table" or type(tbls) ~= "table" then

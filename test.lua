@@ -50,8 +50,7 @@ local header = require "header"
 local emit = require "emit"
 
 rock.cases = {
-  {
-    name = "lexer.lex",
+  ["lexer.lex"]={
     func = (require "lexer").lex,
     cases = {
       "/SSOUND /add server #channel sound H:\\sound.wav match (matc%(h pattern)",
@@ -94,26 +93,12 @@ The full command is:
       },
     },
   },
-  {
-    name="emit.to_string",
+  ["emit.to_string"]={
     func=emit.to_string,
     cases = {
       {
         input={{1, 2, 3}},
         output="{1, 2, 3}",
-      },
-      {
-        input={{[{}] = -0.01, [1.1] = "\n", {key = "value"}}},
-        output=
--- NOTE: The spaces indenting a nonexistent value in the key
--- that's an empty table are undesired
-[[{
-  {
-    key = "value"
-  },
-  [{}] = -0.01,
-  [1.1] = "\n"
-}]],
       },
       {
         input={{-91,nil,nil,400,.0,nil}},
@@ -374,7 +359,8 @@ end
 
 rock.input_output_tests = function ()
   -- For each case suite, run through the test cases, and perform the test
-  for i,case in ipairs(rock.cases) do
+  for name,case in pairs(rock.cases) do
+    case.name = name
     emit.print("Function: %s", case.name)
     for i,test_case in ipairs(case.cases) do
       local input = ""
@@ -424,13 +410,12 @@ rock.summarize_test_results = function (test_results)
     -- If the name hasn't been seen yet, set its pass, fail, and err
     -- counts to 0
     if not pass[name] then
-      pass[name] = 0
-      fail[name] = 0
-      errs[name] = 0
-      emit.print("Results for %s\n", name)
+      pass[name] = {count=0}
+      fail[name] = {count=0}
+      errs[name] = {count=0}
     end
     if result.err ~= nil and result.err then
-      emit.print(
+      table.insert(errs[name], emit.format(
 [[
 Error in test:
 input:
@@ -440,10 +425,10 @@ error:
 ]],
         result.input or "",
         result.err
-      )
-      errs[name] = errs[name] + 1
+      ))
+      errs[name].count = errs[name].count + 1
     elseif result.comparison ~= nil and not result.comparison then
-      emit.print(
+      table.insert(fail[name], emit.format(
 [[
 Test failure:
 input:
@@ -456,10 +441,21 @@ pass output:
         result.input or "",
         result.result,
         result.output or ""
-      )
-      fail[name] = fail[name] + 1
+      ))
+      fail[name].count = fail[name].count + 1
     else
-      pass[name] = pass[name] + 1
+      pass[name].count = pass[name].count + 1
+    end
+  end
+  for name,tbl in pairs(pass) do
+    if #fail[name] > 0 or #errs[name] > 0 then
+      emit.print("Results for %s\n", name)
+    end
+    for i,message in ipairs(fail[name]) do
+      emit.print(message)
+    end
+    for i,message in ipairs(errs[name]) do
+      emit.print(message)
     end
   end
   emit.print("\nSummary:")
@@ -472,15 +468,58 @@ fail: %s
 error: %s
 ]],
       name,
-      pass[name],
-      fail[name],
-      errs[name]
+      pass[name].count,
+      fail[name].count,
+      errs[name].count
     )
   end
   return true
 end
 
+rock.wip_tests = {
+  "test_simple_pass",
+  "test_simple_fail",
+  "test_simple_error",
+  "test_expected_fail",
+  "test_expected_err",
+}
+
+rock.wip_cases = {
+  {
+    name="emit.to_string",
+    cases = {
+      {
+        input={{[{}] = -0.01, [1.1] = "\n", {key = "value"}}},
+        output=
+-- NOTE: The spaces indenting a nonexistent value in the key
+-- that's an empty table are undesired
+[[{
+  {
+    key = "value"
+  },
+  [{}] = -0.01,
+  [1.1] = "\n"
+}]],
+      },
+    },
+  },
+}
+
 rock.run = function ()
+  -- If we're doing these tests for a build, remove the tests we're still
+  -- working on
+  if skip_wip_tests then
+    for i,v in ipairs(rock.wip_tests) do
+      rock[v] = nil
+    end
+  else
+    -- If this is a run during feature building, add the tests we're working on
+    for i,case_tbl in ipairs(rock.wip_cases) do
+      for i,case in ipairs(case_tbl.cases) do
+        table.insert(rock.cases[case_tbl.name].cases, case)
+      end
+    end
+  end
   -- Turn off pretty_printing of tables during tests, as that function is used
   -- to print error messages, as an error thrown during printing error messages
   -- would make finding the error in emit.to_string more difficult
@@ -530,7 +569,6 @@ rock.run = function ()
   rock.input_output_tests()
   -- Turn pretty printing back on for test summaries; this could still error
   emit.pretty_printing = true
-  emit.print(rock.results)
   local success, err = rock.summarize_test_results(rock.results)
   if not success then return success, "Error in test summarization" end
   return "tested"

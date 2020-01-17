@@ -1,5 +1,6 @@
 local rock = {}
 
+---[==[ Utility functions
 rock.copy = function (tbl)
   -- Make a copy of the input table
   -- It's very bad, I know:
@@ -10,6 +11,17 @@ rock.copy = function (tbl)
   for k,v in pairs(tbl) do new_tbl[k]=v end
   return new_tbl
 end
+
+rock.member = function (var, tbl)
+  -- Checks if var is an element of array tbl
+  if type(tbl) ~= "table" then error("tbl not table") end
+  for i,val in ipairs(tbl) do
+    if val == var then return true end
+  end
+  return false
+end
+
+--]==]
 
 ---[==[ Mock hexchat table
 if not hexchat then
