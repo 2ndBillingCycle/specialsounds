@@ -25,8 +25,14 @@ rock.string_repr = function (str)
   if type(str) ~= "string" then
     return str
   end
-  return "\""..str:gsub("\n","\\n")
-                  :gsub("\"","\\\"").."\""
+  local equals_count = -1
+  for bracket,equals in str:gmatch("([%[%]])(=-)%1") do
+    if type(equals) == "string" and #equals >= equals_count then
+      equals_count = #equals + 1
+    end
+  end
+  local equals = string.rep("=", equals_count)
+  return "["..equals.."["..str.."]"..equals.."]"
 end
 
 rock.to_string = function (var)
