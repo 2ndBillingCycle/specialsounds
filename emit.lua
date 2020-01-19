@@ -281,7 +281,11 @@ rock._print = function (...)
 end
 rock.print = rock._print
 
--- This function won't show any output while running under HexChat
+-- NOTE: This function won't show any output while running under HexChat.
+--       That means that if I wish to make the test runner available while
+--       running under HexChat, I have to either eliminate io.write calls,
+--       or make sure that the output makes sense without them; that no info
+--       is lost (e.g. seeing a line of ...x.X.. is nice, but not necessary)
 rock._write = function (...)
   local message, err = rock.format(...)
   -- If there was an error, print the error message
@@ -296,46 +300,45 @@ rock._write = function (...)
 end
 rock.write = rock._write
 
-rock.record = function (...)
-  local message, err = rock.format(...)
-  if not message then
-    error(err)
+rock.record = function (tag)
+  if type(tag) ~= "string" then error("tag must be a string") end
+  return function (...)
+    local message, err = rock.format(...)
+    if not message then
+      error(err)
+    end
+    rock.records[ #rock.records + 1 ] = {tag, message}
+    return message
   end
-  rock.records[ #rock.records + 1 ] = message
-  return message
 end
 
-rock.read_only = function (tbl)
-  -- Make sure returned table is read only so nested callers can't
-  -- manipulate record entries
-  --
-  -- Use the recipe from: https://www.lua.org/pil/13.4.5.html
-  local proxy = {}
-  local mt = {       -- create metatable
-    __index = t,
-    __newindex = function (t,k,v)
-      error("attempt to update a read-only table", 2)
-    end
-  }
-  setmetatable(proxy, mt)
-  return proxy
-end
+rock.record_depth = 0
 
 rock.set_record = function ()
-  rock.err = rock.record
-  rock.info = rock.record
-  rock.print = rock.record
-  rock.write = rock.record
+  rock.err = rock.record("err")
+  rock.info = rock.record("info")
+  rock.print = rock.record("print")
+  rock.write = rock.record("write")
+  rock.record_depth = rock.record_depth + 1
 end
 
 rock.unset_record = function ()
-  rock.err = rock._err
-  rock.info = rock._info
-  rock.print = rock._print
-  rock.write = rock._write
+  -- Don't clear records, so that calls to record() and subsequent
+  -- get_records() can be made without clearing the records seen by
+  -- outter calls.
+  -- Records should only be cleared after the outermost get_records
+  -- has been called, and a new record_prints is called.
+  rock.record_depth = rock.record_depth - 1
+  if rock.record_depth < 1 then
+    rock.err = rock._err
+    rock.info = rock._info
+    rock.print = rock._print
+    rock.write = rock._write
+  end
+  if rock.record_depth < 0 then error("bad reference counting for record depth") end
 end
 
-rock.record_output = function()
+rock.record_prints = function()
 ---[[ Sets all the output functions to record their output instead of printing it,
    -- Returns a function which, when called, resets the printing functions,
    -- and returns an array of all the strings that were generated from calling
@@ -343,10 +346,10 @@ rock.record_output = function()
    -- This is meant to be used like a wrapper:
    -- 
    --> emit = require "emit"                    
-   --> get_output = emit.record_output()
+   --> get_prints = emit.record_prints()
    --> (function () emit.print("Hello!") end)()
    --> emit.info("Hi!")                         
-   --> records = get_output()
+   --> records = get_prints()
    --> emit.print("Hello!")
    --Hello!
    --> =#records
@@ -368,17 +371,16 @@ rock.record_output = function()
     rock.set_record()
     rock.records = {}
   end
-  
-  local get_records = function ()
+
+  return function ()
     -- Don't clear records, so that calls to record() and subsequent
     -- get_records() can be made without clearing the records seen by
     -- outter calls.
     -- Records should only be cleared after the outermost get_records
-    -- has been called, and a new record_output is called.
+    -- has been called, and a new record_prints is called.
     rock.unset_record()
     return header.copy(rock.records)
   end
-  return get_records
 end
 -- I need to be able to exit cleanly when running under hexchat,
 -- and crash when not.

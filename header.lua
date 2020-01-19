@@ -2,9 +2,8 @@ local rock = {}
 
 ---[==[ Utility functions
 rock.copy = function (tbl)
-  -- Make a copy of the input table
-  -- It's very bad, I know:
-  -- It's for use with record_output();
+  -- Make a shallow copy of the input table
+  -- It's very bad, I know;
   -- don't sue me
   if type(tbl) ~= "table" then error("can only copy tables") end
   local new_tbl = {}
@@ -21,6 +20,47 @@ rock.member = function (var, tbl)
   return false
 end
 
+rock.read_only = function (tbl)
+  -- Make sure returned table is read only so nested callers can't
+  -- manipulate entries
+  --
+  -- Use the recipe from: https://www.lua.org/pil/13.4.5.html
+  local proxy = {}
+  local mt = {       -- create metatable
+    __index = t,
+    __newindex = function (t,k,v)
+      error("attempt to update a read-only table", 2)
+    end
+  }
+  setmetatable(proxy, mt)
+  return proxy
+end
+
+rock.compare_tables = function (tbl1, tbl2)
+  -- Fails if the same key in both tables doesn't have the same value, otherwise it succeeds
+  -- If the values are tables, checks if those tables match
+  -- NOTE: Does not work with nested tables:
+  -- a={} a[1]=a rock.compare_tables(a,a) -> ./test.lua:183: stack overflow
+  if type(tbl1) ~= "table" or type(tbl2) ~= "table" then
+    error("args must be tables")
+  end
+  -- pull out each element of the desired table, and compare to each element of received
+  for k,v in pairs(tbl1) do
+    -- first, types must match
+    if type(v) ~= type(tbl2[k]) then
+      return false
+    -- if they're tables, take those tables and run this function against them
+    elseif type(v) == "table" then
+      -- tbl1 = {{"a"}} tbl2 = {{"a"}} -> tbl1={"a"} tbl2={"a"}
+      local res = rock.compare_tables(v, tbl2[k])
+      if not res then return false end
+    -- otherwise compare the values
+    elseif tbl2[k] ~= v then
+      return false
+    end
+  end
+  return true
+end
 --]==]
 
 ---[==[ Mock hexchat table

@@ -48,180 +48,27 @@ local rock = {}
 
 local header = require "header"
 local emit = require "emit"
+local tests = require "tests"
 
-rock.cases = {
-  ["lexer.lex"]={
-    func = (require "lexer").lex,
-    cases = {
-      "/SSOUND /add server #channel sound H:\\sound.wav match (matc%(h pattern)",
-      "/SSOUND /add server #channel sound H:\\sound.wav",
-      "/SSOUND /add server #channel match pattern",
-      "/SSOUND /add server match pattern",
-      "/SSOUND /add server sound sound",
-      "/SSOUND /add #channel match word",
-      "/SSOUND /add #channel sound sound.wav",
-      "/SSOUND /add match (pitter patter)",
-      "/SSOUND /add sound rain.wav",
-      "/SSOUND /add (match) match match sound sound",
-      "/SSOUND /show server #channel",
-      "/SSOUND /show server",
-      "/SSOUND /show #channel",
-      "/SSOUND /show (match)",
-      "/SSOUND /show ",
-      "/SSOUND /delete server #channel 2",
-      "/SSOUND /delete server #channel 1",
-      "/SSOUND /delete server 1",
-      "/SSOUND /delete #channel 1",
-      "/SSOUND /delete (match) 1",
-      "/SSOUND /delete 1",
-      {
-        input="(error",
-        output={nil, [[
-Unbalanced parenthesis: missing )
-
-This is the group:
-(error
-
-The full command is:
-/nil (error]]},
-      },
-      {
-        input="error)",
-        output={
-          {{name="text", value="error)"}}
-        },
-      },
-    },
-  },
-  ["emit.to_string"]={
-    func=emit.to_string,
-    cases = {
-      {
-        input={{1, 2, 3}},
-        output="{1, 2, 3}",
-      },
-      {
-        input={{-91,nil,nil,400,.0,nil}},
-        output="{-91, nil, nil, 400, 0}",
-      },
-      {
-        input={{key="value"}},
-        output="{key = [[value]]}",
-      },
-      {
-        input={{[1]="value"}},
-        output="{[[value]]}",
-      },
-      {
-        input={{[1.1]="2"}},
-        output="{[1.1] = [[2]]}",
-      },
-      {
-        input={{1,[1.1]="2",3}},
-        output="{\n  1,\n  3,\n  [1.1] = [[2]]\n}",
-      },
-      {
-        input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}},
-        output=
-[=[{
-  1,
-  2,
-  3,
-  [1.1] = [[a]],
-  [{
-    1,
-    key = [[value]]
-  }] = {
-    1,
-    key = [[value]]
-  }
-}]=],
-      },
-      {
-        input={{[{1,2}]={1,2}}},
-        output="{[{1, 2}] = {1, 2}}",
-      },
-      {
-        input={{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}},
-        output="{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}",
-      },
-    },
-  },
-}
-
---[==[ Each case table looks like this
-The case table is a list of inputs (and outputs) to be fed to the function that is being tested.
-
-Each element can either be a straight value, in which case the output is expected to be a literal true,
-or can be a table with two keys: input and output.
-
-Both the input and output keys can be either straight values, or can be tables.
-
-If the input is a table, it is trated as an array of arguments to pass as inputs to the function,
-and it is unpack()'d. If the output is a table, the function is assumed to return multiple values,
-and each of its return values will be compared, in order, to the array in output.
-
-If the input and/or output need to be tables, input and output must still be arrays, and so can have a
-table as their only element: input={{key="value"}}
-
-Example:
-{
-  "string",
-  {input="string", output=false},
-  {
-    input={1,2,3},
-    output={"a","b","c"},
-  },
-  {
-    input={{key="value"}},
-    output={{key="value"}},
-  },
-}
---]==]
-
-rock.compare_tables = function (tbl1, tbl2)
-  -- Fails if the same key in both tables doesn't have the same value, otherwise it succeeds
-  -- If the values are tables, checks if those tables match
-  -- NOTE: Does not work with nested tables:
-  -- a={} a[1]=a rock.compare_tables(a,a) -> ./test.lua:183: stack overflow
-  if type(tbl1) ~= "table" or type(tbl2) ~= "table" then
-    error("args must be tables")
-  end
-  -- pull out each element of the desired table, and compare to each element of received
-  for k,v in pairs(tbl1) do
-    -- first, types must match
-    if type(v) ~= type(tbl2[k]) then
-      return false
-    -- if they're tables, take those tables and run this function against them
-    elseif type(v) == "table" then
-      -- tbl1 = {{"a"}} tbl2 = {{"a"}} -> tbl1={"a"} tbl2={"a"}
-      local res = rock.compare_tables(v, tbl2[k])
-      if not res then return false end
-    -- otherwise compare the values
-    elseif tbl2[k] ~= v then
-      return false
-    end
-  end
-  return true
-end
-
-rock.compare_output = function (expected, received)
-  -- received output must always be a table
-  if type(received) ~= "table" then error("received not table") end
+rock.compare_output = function (expected_output, output)
+  -- output output must always be a table
+  if type(output) ~= "table" then error("output not table") end
   -- Are we comparing error output?
-  if type(expected) == "table" and expected[1] == nil and type(expected[2]) == "string" then
-    return not received[1] and expected[2] == received[2] -- Check if the error matches
-  -- If the expected value is a literal true, test received for truthiness
-  elseif expected == true then
-    if received[1] then return true else return false end
+  if type(expected_output) == "table"
+     and expected_output[1] == nil
+     and type(expected_output[2]) == "string" then
+    return not output[1] and expected_output[2] == output[2] -- Check if the error matches
+  -- If the expected_output value is a literal true, test output for truthiness
+  elseif expected_output == true then
+    if output[1] then return true else return false end
   -- If it's a simple type, compare the values
-  elseif type(expected) ~= "table" then
-    return expected == received[1]
-  elseif type(expected) == "table" then
-    -- expected is a table, and does not indicate an error condition
-    return rock.compare_tables(expected, received)
+  elseif type(expected_output) ~= "table" then
+    return expected_output == output[1]
+  elseif type(expected_output) == "table" then
+    -- expected_output is a table, and does not indicate an error condition
+    return header.compare_tables(expected_output, output)
   else
-    error("unkown expected/received sructure")
+    error("unkown expected_output/output sructure")
   end
 end
 
@@ -230,99 +77,54 @@ end
    --     name="function name",
    --     func=function,
    --     input="input argument(s)",
-   --     output="desired output",
-   --     result={func(input)},
-   --     print={"printed string"},
-   --     comparison=rock.compare_output(result, expected),
+   --     expected_output="expected output",
+   --     output={func(input)},
+   --     expected_print={"expected strings"}
+   --     print_output={"printed string"},
+   --     comparison=rock.compare_output(output, expected_output)
+   --                and header.compare_tables(expected_print, print_output)
    --     err="error string returned by test runner itself; may be nil if no error",
    --   }
 rock.results = {}
 
-rock.add_result = function (name, func, input, output, result, print, comparison, err)
-  local last_result = rock.results[ #rock.results ]
-  if type(last_result) == "table" and
-     last_result.name == name and
-     last_result.func == func and
-     last_result.input == input and
-     last_result.output == output and
-     type(last_result.name) == "string" and
-     type(last_result.func) == "function" and
-     type(last_result.input) ~= "nil" and
-     type(last_result.output) ~= "nil" then
-
-    last_result.result = result
-    last_result.print = print
-    last_result.comparison = comparison
-    last_result.err = err
-  else
-    table.insert(rock.results, {
-      name=name,
-      func=func,
-      input=input,
-      output=output,
-      result=result,
-      print=print,
-      comparison=comparison,
-      err=tostring(err),
-    })
-  end
-end
-
-rock.test_simple_pass = function ()
-  return true
-end
-
-rock.test_simple_fail = function ()
-  return false
-end
-
-rock.test_simple_error = function ()
-  error("This error is intentional")
-end
-
-rock.test_expected_fail = function ()
-  local f_err, result, err = pcall(rock.test_simple_fail)
-  return err ~= "This error is intentional"
-end
-
-rock.test_expected_err = function ()
-  local f_err, result, err = pcall(rock.test_simple_error)
-  return not f_err and result:match("This error is intentional")
-end
-
-rock.perform_test = function (name, func, input, output)
+rock.perform_test = function (name, func, input, expected_output, expected_print)
   if type(name) ~= "string" then error("name is not string") end
+  if type(func) ~= "function" then error("func is not a function") end
+  if expected_output == nil then error("expected output is nil") end
+  if expected_print == nil then expected_print = {} end
   local results = {
     name=name,
     func=func,
     input=input,
-    output=output,
+    expected_output=expected_output,
+    expected_print=expected_print,
   }
-  local get_output = emit.record_output()
+  local get_prints = emit.record_prints()
   if type(input) == "table" then
-    results.result = {xpcall(
+    results.output = {xpcall(
                               function ()
                                 return func(unpack(input))
                               end,
                               debug.traceback
                             )}
   else
-    results.result = {xpcall(
+    results.output = {xpcall(
                               function ()
                                 return func(input)
                               end,
                               debug.traceback
                             )}
   end
-  results.print = get_output()
-  results.err = not table.remove(results.result, 1)
+  results.print_output = get_prints()
+  results.err = not table.remove(results.output, 1)
   if results.err then
-    results.err = table.remove(results.result, 1)
+    results.err = table.remove(results.output, 1)
   else
     -- We do the comparison here as we want to be able to print out a running line of ...x...XO..
     -- NOTE: It'd be ideal to not have errors from compare_output() be mixed in with errors from
     -- running the test, but I guess those errors would show up in the xpcall()
-    results.comparison = rock.compare_output(output, results.result)
+    results.output_comparison = rock.compare_output(expected_output, results.output)
+                                and header.compare_tables(expected_print, results.print_output)
   end
   if results.comparison then
     emit.write(".") 
@@ -337,25 +139,25 @@ end
 
 rock.input_output_tests = function ()
   -- For each case suite, run through the test cases, and perform the test
-  for name,case in pairs(rock.cases) do
+  for name,case in pairs(tests.cases) do
     case.name = name
     emit.print("Function: %s", case.name)
     for i,test_case in ipairs(case.cases) do
       local input = ""
-      local output = ""
+      local expected_output = ""
       if type(test_case) == "table" then
         input = test_case.input
-        output = test_case.output
+        expected_output = test_case.expected_output
       else
         input = test_case
-        output = true -- Default is to test if the function returns a truthy value
+        expected_output = true -- Default is to test if the function returns a truthy value
       end
 
       rock.perform_test(
         case.name,
         case.func,
         input,
-        output
+        expected_output
       )
     end
     emit.write("\n")
@@ -372,7 +174,10 @@ rock.summarize_test_results = function (test_results)
   for i,result in ipairs(rock.results) do
     local name = result.name
     local input = result.input ~= nil and emit.format("\ninput:\n%s", result.input) or "\n"
-    local output = result.output ~= nil and emit.format("expected:\n%s", result.output) or ""
+    local expected_output = ""
+    if result.expected_output ~= nil then
+      expected_output = assert(emit.format("expected:\n%s", result.expected_output))
+    end
     -- If the name hasn't been seen yet, set its pass, fail, and err
     -- counts to 0
     if not pass[name] then
@@ -400,8 +205,8 @@ output:
 %s
 ]],
         input,
-        result.result,
-        output
+        result.output,
+        expected_output
       ))
       fail[name].count = fail[name].count + 1
     else
@@ -437,82 +242,40 @@ error: %s
   return true
 end
 
-rock.wip_tests = {
-  "test_simple_pass",
-  "test_simple_fail",
-  "test_simple_error",
-  "test_expected_fail",
-  "test_expected_err",
-}
-
-rock.wip_cases = {
-  {
-    name="emit.to_string",
-    cases = {
-      {
-        input={{[{}] = -0.01, [1.1] = "\n", {key = "value"}}},
-        output=
--- NOTE: The spaces indenting a nonexistent value in the key
--- that's an empty table are undesired
-[=[{
-  {
-    key = [[value]]
-  },
-  [{}] = -0.01,
-  [1.1] = [[
-]]
-}]=],
-      },
-    },
-  },
-}
-
 rock.run = function ()
-  -- If we're doing these tests for a build, remove the tests we're still
-  -- working on
-  if skip_wip_tests then
-    for i,v in ipairs(rock.wip_tests) do
-      rock[v] = nil
-    end
-  else
-    -- If this is a run during feature building, add the tests we're working on
-    for i,case_tbl in ipairs(rock.wip_cases) do
-      for i,case in ipairs(case_tbl.cases) do
-        table.insert(rock.cases[case_tbl.name].cases, case)
-      end
-    end
-  end
   -- Turn off pretty_printing of tables during tests, as that function is used
   -- to print error messages, as an error thrown during printing error messages
   -- would make finding the error in emit.to_string more difficult
   emit.pretty_printing = false
   -- Find functions in this module that start with test_ and run them
   emit.print("unit tests:")
-  for name,func in pairs(rock) do
-    if name:match("^test_.+") then
+  for name,func in pairs(tests) do
+    if name:match("^test_.+") and type(func) == "function" then
       local results = {
         name=name,
         func=func,
      -- input="input argument(s)",
-     -- output="desired output",
-     -- result={func(input)},
-     -- print={"printed string"},
-     -- comparison=rock.compare_output(output, result),
+     -- expected_output="expected output",
+     -- output={func(input)},
+     -- expected_print={"expected strings"}
+     -- print_output={"printed string"},
+     -- comparison=rock.compare_output(output, expected_output)
+     --            and header.compare_tables(expected_print, print_output)
      -- err="error string returned by test runner itself; may be nil if no error",
       }
-      local get_records = emit.record_output()
-      results.result = {xpcall(
+      local get_prints = emit.record_prints()
+      results.output = {xpcall(
                                 function ()
                                   return func(results)
                                 end,
                                 debug.traceback
                        )}
-      results.print = get_records()
-      results.err = not table.remove(results.result, 1)
+      results.print_output = get_prints()
+      results.err = not table.remove(results.output, 1)
       if results.err then
         emit.write("X")
       end
-      results.comparison = results.result[1] and true or false
+      results.comparison = results.output[1] and true or false
       if results.comparison then
         emit.write(".")
       else
