@@ -44,6 +44,9 @@ rock.compare_tables = function (tbl1, tbl2)
   if type(tbl1) ~= "table" or type(tbl2) ~= "table" then
     error("args must be tables")
   end
+  -- Is one of the tables empty, and if so, is the other?
+  -- From: https://stackoverflow.com/a/1252776 and https://www.lua.org/manual/5.1/manual.html#pdf-next
+  if next(tbl1) == nil then return next(tbl2) == nil end
   -- pull out each element of the desired table, and compare to each element of received
   for k,v in pairs(tbl1) do
     -- first, types must match
@@ -52,8 +55,7 @@ rock.compare_tables = function (tbl1, tbl2)
     -- if they're tables, take those tables and run this function against them
     elseif type(v) == "table" then
       -- tbl1 = {{"a"}} tbl2 = {{"a"}} -> tbl1={"a"} tbl2={"a"}
-      local res = rock.compare_tables(v, tbl2[k])
-      if not res then return false end
+      if not rock.compare_tables(v, tbl2[k]) then return false end
     -- otherwise compare the values
     elseif tbl2[k] ~= v then
       return false

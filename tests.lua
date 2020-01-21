@@ -1,6 +1,8 @@
 local rock = {}
 
 local emit = require "emit"
+local header = require "header"
+
 ---[====[ Test functions
 rock.test_simple_pass = function ()
   return true
@@ -25,15 +27,17 @@ rock.test_expected_err = function ()
 end
 
 local function prints_stuff ()
-  emit.print("Hi! Testing")
-  emit.info("Here's some info")
-  emit.err("Uhoh, an error!")
-  emit.write("Wrote it!")
+  return {
+    emit.print("Hi! Testing"),
+    emit.info("Here's some info"),
+    emit.err("Uhoh, an error!"),
+    emit.write("Wrote it!"),
+  }
 end
 
 rock.test_print_capture = function ()
  local get_prints = emit.record_prints()
- prints_stuff()
+ local return_value = prints_stuff()
  local print_records = get_prints()
  return header.compare_tables(print_records, {
    {"print", "Hi! Testing"},
@@ -41,6 +45,12 @@ rock.test_print_capture = function ()
    {"err",   "Uhoh, an error!"},
    {"write", "Wrote it!"},
  })
+    and header.compare_tables(return_value, {
+      "Hi! Testing",
+      "Here's some info",
+      "Uhoh, an error!",
+      "Wrote it!",
+    })
 end
 --]==]
 
@@ -183,8 +193,8 @@ rock.wip_tests = {
 }
 
 rock.wip_cases = {
-  {
-    name="emit.to_string",
+  ["emit.to_string"]={
+    func=(require "emit").to_string,
     cases = {
       {
         input={{[{}] = -0.01, [1.1] = "\n", {key = "value"}}},
@@ -202,6 +212,33 @@ rock.wip_cases = {
       },
     },
   },
+  print_example={
+    func=prints_stuff,
+    cases={
+      {
+        expected_output={{
+          "Hi! Testing",
+          "Here's some info",
+          "Uhoh, an error!",
+          "Wrote it!",
+        }},
+        expected_prints={
+          {"print", "Hi! Testing"},
+          {"info", "Here's some info"},
+          {"err", "Uhoh, an error!"},
+          {"write", "Wrote it!"},
+        },
+      },
+    },
+  },
+  no_print={
+    func=function () emit.print("Oops, not supposed to print!") end,
+    cases={
+      {
+        expected_output={nil},
+      },
+    },
+  },
 }
 
 -- If we're doing these tests for a build, remove the tests we're still
@@ -213,9 +250,16 @@ if skip_wip_tests then
   end
 else
   -- If this is a run during feature building, add the tests we're working on
-  for i,case_tbl in ipairs(rock.wip_cases) do
+  for name,case_tbl in pairs(rock.wip_cases) do
+    if rock.cases[name] == nil then
+      rock.cases[name] = {
+        func=case_tbl.func,
+        cases={},
+      }
+    end
+    if case_tbl.cases == nil then error(("%s missing cases"):format(tostring(name))) end
     for i,case in ipairs(case_tbl.cases) do
-      table.insert(rock.cases[case_tbl.name].cases, case)
+      table.insert(rock.cases[name].cases, case)
     end
   end
 end
