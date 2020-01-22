@@ -74,32 +74,28 @@ local emit = require "emit"
 -- NOTE: Changes line endings to CRLF :(
 rock.bumpver = function ()
   -- If the global variable bumpver is not set, do nothing
-  if not bumpver then return nil end
-  local handle, err = io.open("header.lua", "r")
-  if not handle and err then
-    emit.err("Bad file: %s", err)
-    return false
-  end
+  if not bumpver then return nil, emit.err("bumpver not set; won't bump") end
+  local handle = assert(io.open("header.lua", "r"))
   local file = handle:read("*all")
   assert(handle:close())
   if not file then
     emit.err("Empty header.lua")
     return false
   end
-  local ver = file:match("\nrock\.version = \"([0-9]+)\"\n")
+  -- Matching line used to be as below, witht he match wrapped in newlines so as to match
+  -- ONLY the version string no a single line, as opposed to one in a comment somewhere,
+  -- but LuaJIT doesn't like that
+  --local ver = file:match("\nrock%.version = \"([0-9]+)\"\n")
+  local ver = file:match("rock%.version = \"([0-9]+)\"")
+  local line = ""
   if ver and type(tonumber(ver)) == "number" then
     ver = tostring(ver + 1)
     line = ("rock.version = \"%s\""):format(ver)
   else
-    emit.err("Can't find version number")
-    return false
+    error("Can't find version number")
   end
-  new_file = file:gsub("\nrock\.version = \"([0-9]+)\"\n", "\nrock.version = \""..ver.."\"\n")
-  local handle, err = io.open("header.lua", "w")
-  if not handle and err then
-    emit.err("Can't reopen: %s", err)
-    return false
-  end
+  new_file = file:gsub("rock%.version = \"([0-9]+)\"", "rock.version = \""..ver.."\"")
+  local handle = assert(io.open("header.lua", "w"))
   assert(handle:write(new_file))
   assert(handle:close())
   return true
@@ -111,6 +107,7 @@ rock.run = function ()
     "header.lua", -- Check if we're running under HexChat, and register early to keep it happy
     "emit.lua",   -- Implements print(("%s"):format(""))
     "lexer.lua",
+    "tests.lua",
     "test.lua",
     "main.lua",
   }

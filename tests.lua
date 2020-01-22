@@ -190,6 +190,7 @@ rock.wip_tests = {
   "test_simple_error",
   "test_expected_fail",
   "test_expected_err",
+  "test_print_capture",
 }
 
 rock.wip_cases = {
