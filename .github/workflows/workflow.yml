@@ -1,0 +1,42 @@
+name: CI
+
+#on:
+#  push:
+#    branches:
+#      - master
+#  pull_request:
+#    branches:
+#      - master
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+    - uses: actions/checkout@master
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install luarocks luajit
+
+    - uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }} #required
+        file: ./coverage.xml #optional
+        flags: tests #optional
+        name: codecov-umbrella #optional
+        yml: ./codecov.yml #optional
+        fail_ci_if_error: true #optional (default = false)
+
+    - name: Cache install dependencies
+      uses: actions/cache@v1.1.0
+      with:
+        # A directory to store and save the cache
+        path: 
+        # An explicit key for restoring and saving the cache
+        key: 
+        # An ordered list of keys to use for restoring the cache if no cache hit occurred for key
+        restore-keys: # optional
