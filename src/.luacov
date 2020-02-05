@@ -1,0 +1,5 @@
+-- This is the configuration file for LuaCov:
+-- https://keplerproject.github.io/luacov/doc/modules/luacov.defaults.html
+return {
+  includeuntestedfiles = true,
+}

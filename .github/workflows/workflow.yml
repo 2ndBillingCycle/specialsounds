@@ -1,12 +1,16 @@
 name: CI
 
-#on:
-#  push:
-#    branches:
-#      - master
-#  pull_request:
-#    branches:
-#      - master
+#on: [pull_request]:
+
+# On pull_requests to any branch, I would like the following to happen:
+# - Tests are run
+# - Tests are uploaded to codecov
+# On pull_requests against master:
+# - header.lua is version-bumped
+# - Tests are run as on pull_requests
+# - The package is built
+# - The package is uploaded as a release asset/artifact
+# - A commit is added that includes the new SpecialSounds.lua and header.lua
 
 jobs:
   test:
@@ -14,29 +18,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-    - uses: actions/checkout@master
+    - name: Checkout current code from 2ndbillingcycle/specialsounds
+      uses: actions/checkout@master
 
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install luarocks luajit
+        sudo apt-get install luajit build-essential
+        # It's unlikely an existing lua interpreter is installed, but this does set up the idea
+        # of how I'd have multiple lua interpreters installed, and switch between them for
+        # matrix job runs, if that ever needs to happen
+        # Alternatively, I could manually symlink luajit to lua
+        sudo update-alternatives --install /usr/bin/lua lua-interpreter "$(which luajit)" 120
+        sudo update-alternatives --set lua-interpreter "$(which luajit)"
+        # Install luarocks after LuaJIT, just in case it gets funny with installing its own interpreter
+        # and configuring itself for that one
+        sudo apt-get install luarocks --no-install-recommends
+        eval $(luarocks path | tee -a ~/.bashrc)
 
-    - uses: codecov/codecov-action@v1
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }} #required
-        file: ./coverage.xml #optional
-        flags: tests #optional
-        name: codecov-umbrella #optional
-        yml: ./codecov.yml #optional
-        fail_ci_if_error: true #optional (default = false)
+    - name: Download list of LuaCov releases
+      run: |
+        curl -L https://api.github.com/repos/keplerproject/luacov/tags > luacov_releases.json
 
+    # Apparently, if there's no cache for this key, the action will wait untilt he end of the run
+    # and save the stuff in the path under the key as a new cache:
+    # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows#using-the-cache-action
     - name: Cache install dependencies
+      id: cache
       uses: actions/cache@v1.1.0
       with:
         # A directory to store and save the cache
-        path: 
+        path: ~/.luarocks
         # An explicit key for restoring and saving the cache
-        key: 
+        key: ${{ runner.os }}-luarocks-${{ hashFiles('luacov_releases.json') }}
         # An ordered list of keys to use for restoring the cache if no cache hit occurred for key
-        restore-keys: # optional
+        #restore-keys: # optional
+
+    - name: Build luacov if it's not in the cache
+      # https://github.com/actions/cache#Skipping-steps-based-on-cache-hit
+      if: steps.cache.outputs.cache-hit != "true"
+      run: |
+        luarocks install cluacov
+        # https://stackoverflow.com/a/11621788/5059062
+        eval $(echo 'export PATH="${PATH}:$(dirname ~/.luarocks/bin/luacov)"' | tee -a ~/.bashrc)
+
+    - name: Run tests
+      run: |
+        pushd src/
+        lua -lluacov -e "test=1" build.lua
+        luacov
+        popd
+
+    - name: Upload test coverage to codecov.io
+      uses: codecov/codecov-action@master
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }} #required
+        file: ./src/luacov.report.out #optional
+        #flags: tests #optional
+        #name: codecov-umbrella #optional
+        #yml: ./codecov.yml #optional
+        fail_ci_if_error: true #optional (default = false)

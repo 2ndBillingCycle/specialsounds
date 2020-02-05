@@ -1,4 +1,4 @@
-build/
+src/luacov*
 
 saved.code-workspace
 Session.vim

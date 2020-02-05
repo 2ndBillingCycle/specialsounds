@@ -42,8 +42,11 @@ I do know it'd be a good idea to cache the [luarocks files in `~/.luarocks/`](ht
 
 Additionally, Lua needs to know about these things, and luarocks doesn't appear to configure any environment variables for us, but a quick `eval $(luarocks path)` does the trick.
 
-Okay, so the list so far is:
+Okay, so the list for testing so far is:
 
 - Install LuaJIT, luarocks
 - Use luarocks to install cluacov
 - tell lua about LuaCov via `luarocks path`
+- run tests with luacov loaded as a library
+- Upload tests using the CodeCov GitHub Action
+- Mark the luarocks files for caching
