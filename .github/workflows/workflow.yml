@@ -2,16 +2,6 @@ name: CI
 
 #on: [pull_request]:
 
-# On pull_requests to any branch, I would like the following to happen:
-# - Tests are run
-# - Tests are uploaded to codecov
-# On pull_requests against master:
-# - header.lua is version-bumped
-# - Tests are run as on pull_requests
-# - The package is built
-# - The package is uploaded as a release asset/artifact
-# - A commit is added that includes the new SpecialSounds.lua and header.lua
-
 jobs:
   test:
 
