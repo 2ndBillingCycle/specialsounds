@@ -144,3 +144,164 @@ Now, I know I can get the plugin to get HexChat to pretend a particular message 
 I might have to look at how HexChat is tested and see if it would be possible to run an automated integration test.
 
 Without knowing anything about the process, my first guess would be to have the tests save a file as part of their run inside HexChat, but that wouldn't tell me if a "beep" was made when it was supposed to be.
+
+---
+
+Also, it looks as if I'll want 3 jobs:
+
+- Test
+- Build
+- Release
+
+Where the following trigger each event:
+
+- Test: any push/pull request
+- Build: Pull requests and pushes to master
+- Release: Tags of the form `/v[0-9\.]+` on the master branch
+
+Builds might need more context on what triggered the build, so it has soe way of providing a build artifact, unless the green chack marks on a commit would take someone to the GitHub Actions page that includes the output.
+
+The order is also fairly dependant here: The release step needs a build artifact, and nothing should be done if tests are failing.
+
+Fortunately, [there's syntax for that](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#jobsjob_idneeds).
+
+Also, my suspicions were correct ([from the docs](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#jobsjob_idsteps)):
+
+> Each step runs in its own process in the runner environment and has access to the workspace and filesystem.
+> Because steps run in their own process, changes to environment variables are not preserved between steps.
+
+We'll find the ["proper way"](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables) later.
+
+I think it'd be good to set some sensible limits [on the runtime](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes), as I expect the steps to finish pretty quickly. 10 minutes is probably already generous.
+
+Following a [Google breadcrumb trail](https://github.com/maxheld83/ghactions/issues/89#issuecomment-538776275) to [this article](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/development-tools-for-github-actions#set-an-environment-variable-set-env):
+
+```text
+::set-env name={name}::{value}
+```
+```sh
+echo "::set-env name=action_state::yellow"
+```
+
+Now we can set environment variables that persist until the end of the job.
+
+So it looks like this is what's left to figure out:
+
+- Run a job from the step of another job:
+  - Run the `test` job as part of the `build` job
+  - If this isn't possible, not a big deal: we can make the order dependent with [`needs:`](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#jobsjob_idneeds)
+- How to manipulate the remote repository using the [`GITHUB_TOKEN`](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/authenticating-with-the-github_token)
+- Make a GitHub release
+- Attach build artifacts to different places they'd need to be:
+  - Attach the generated `SpecialSounds.lua` as an artifact to:
+    - The release
+    - A comment in a PR
+    - A comment on a commit
+
+For the repository manipulation, the actions we want to be able to take are:
+
+- Deleting a tag
+- Pushing a commit
+- Pushing an annotated tag
+
+All of these can be done programmatically using `git`, as long as that has authenticated push access to the repo.
+
+[`actions/github-script`](https://github.com/actions/github-script) looks promising for doing GitHub specific stuff, but not so much for `git` stuff.
+
+In the meantime, there are actions specifically for:
+
+- Making a release: [`actions/create-release`](https://github.com/actions/create-release)
+- Uploading a release asset: [`actions/upload-release-asset`](https://github.com/actions/upload-release-asset)
+
+I hope I won't need [the ability to SSH into the running GitHub action to debug it](https://github.com/mxschmitt/action-tmate), but I might need to.
+
+It also turns out other people want to automate committing to a repo from within a GitHub Action:
+
+- Someone made a [GitHub action to push changes made to the local repository](https://github.com/ad-m/github-push-action)
+- Another exposed each part of the GitHub REST API as an action, [including commits](https://github.com/maxkomarychev/octions/blob/master/octions/git/create-commit/README.md)
+- Another few people settled on a few variations of changing the remote url in `git`:
+  - [dlunch in the forums](https://github.community/t5/GitHub-Actions/how-does-one-commit-from-an-action/m-p/30340/highlight/true#M407)
+  - [garethr on their website](https://garethr.dev/2019/09/github-actions-that-commit-to-github/)
+
+I also need to find the most recent tag, and grab its name and message. I had a couple ways to grab its name:
+
+- `git log --tags="v*" --format="format:%S" -n 1` from me
+- `git describe --tags --match "v*" --abbrev=0` from [the docs](https://git-scm.com/docs/git-describe#_options) as pointed by [here](https://stackoverflow.com/a/1404862/5059062)
+
+Dropping `--tags` from the latter guarantees only annotated tags will be returned.
+
+~I'm getting the message using [`git show`](https://git-scm.com/docs/git-show#_pretty_formats):~
+
+I'm getting the message using [`git log`](https://git-scm.com/docs/git-log) since `git show` shows a lot of information by default:
+
+```bash
+git log -n 1 --format="%B" --no-notes $(git describe --match "v*" --abbrev=0)
+```
+
+And actually, naming the commit after the new release number would require me to preemptively find the release number, and mentally increment it, and that sounds like extra work the computer could do.
+
+If I just name the release commit `release`, that should be enough of a magic name to be able to programmatically find it and replace it with `v...`.
+
+To err on the side of caution, though, it'd probably be safer to name it `prerelease`, just in case the tests or build fails, and the tag is left there.
+
+To do all of this, I'm going wih the action-less approach:
+
+```bash
+# Do version bump, testing, and building
+git config --local user.name "GitHub Actions"
+git config --local user.email "2nd+githubactions@2ndbillingcycle.stream"
+git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+# Unfortunately the following doesn't work: git mv :/src/SpecialSounds.lua :/
+mv src/SpecialSounds.lua ./
+git add :/SpecialSounds.lua :/src/header.lua
+export TAG_NAME="$(git describe --match 'prerelease' --abbrev=0)"
+export TAG_MESSAGE="$(git log -n 1 --format=%B --no-notes ${TAG_NAME}"
+git commit -m "Release ${TAG_NAME}"
+git tag --force --annotate --no-sign --message="${TAG_MESSAGE}" "${TAG_NAME}"
+git push origin --delete "${TAG_NAME}"
+git push --tags origin master # Explicitly push the new master, and the new tag
+```
+
+We can make a release by using one of the aforementioned actions, now that the new annotated tag has been made:
+
+```yaml
+- name: Grab most recent tag name and message
+  run: |
+    export TAG_NAME="$(git describe --match 'v*' --abbrev=0)"
+    # Multiline: https://github.com/actions/starter-workflows/issues/68#issuecomment-581479448
+    export TAG_MESSAGE=$(git log -n 1 --format="%B" --no-notes ${TAG_NAME} | sed -e 's/\n/%0A/g')
+    echo "::set-env name=TAG_NAME::${TAG_NAME}"
+    echo "::set-env name=TAG_MESSAGE::${TAG_MESSAGE}"
+- name: Make release
+  id: make_release
+  uses: action/create-release@master
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  with:
+    tag_name: ${{ env.TAG_NAME }}
+    release_name: ${{ env.TAG_NAME }}
+    body: ${{ env.TAG_MESSAGE }}
+    draft: false
+    prerelease: false
+```
+
+And then attach `SpecialSounds.lua`, using the [output from the previous step](https://github.com/actions/create-release#outputs) which we [can reference](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/contexts-and-expression-syntax-for-github-actions#steps-context):
+
+```yaml
+- name: Upload release asset
+  id: upload_asset
+  uses: action/upload-release-asset@master
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  with:
+    upload_url: ${{ steps.make_release.outputs.upload_url }}
+```
+
+Before putting it all together, I want to review how these workflows should be triggered:
+
+- Testing and building: Every push to any branch, and every pull request
+- Testing, building, and releasing: only on tags pushed to master
+
+I kind of worry that that might go over [the usage limits](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/about-github-actions#usage-limits), but I don't think this repository currently, or will ever, see enough activity to have to worry about that.
+
+Actually, I don't think 1000 API calls in 1 hour is going to be possible, as it seems there's no weekly or daily limit on the number of times the CI can be triggered.

@@ -1,4 +1,4 @@
-name: CI
+name: Building and Testing
 
 #on: [pull_request]:
 
@@ -14,7 +14,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install luajit build-essential
+        # build-essential is already installed:
+        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/software-installed-on-github-hosted-runners#ubuntu-1804-lts
+        sudo apt-get install luajit
         # It's unlikely an existing lua interpreter is installed, but this does set up the idea
         # of how I'd have multiple lua interpreters installed, and switch between them for
         # matrix job runs, if that ever needs to happen
@@ -24,6 +26,8 @@ jobs:
         # Install luarocks after LuaJIT, just in case it gets funny with installing its own interpreter
         # and configuring itself for that one
         sudo apt-get install luarocks --no-install-recommends
+        # Will this work with the following steps?
+        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#about-environment-variables
         eval $(luarocks path | tee -a ~/.bashrc)
 
     - name: Download list of LuaCov releases
@@ -54,7 +58,9 @@ jobs:
 
     - name: Run tests
       run: |
-        pushd src/
+        # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action.""
+        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#default-environment-variables
+        pushd specialsounds/src/
         lua -lluacov -e "test=1" build.lua
         luacov
         popd
@@ -68,3 +74,5 @@ jobs:
         #name: codecov-umbrella #optional
         #yml: ./codecov.yml #optional
         fail_ci_if_error: true #optional (default = false)
+  build:
+  release:
