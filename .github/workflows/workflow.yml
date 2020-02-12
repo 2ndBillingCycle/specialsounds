@@ -1,78 +1,106 @@
 name: Building and Testing
 
-#on: [pull_request]:
+#on:
+#  push:
+#  tags:
+#    branch:
+#      - master
 
 jobs:
-  test:
-
+  build_test_and_maybe_release:
     runs-on: ubuntu-latest
-
+    env:
+      DO_RELEASE: false
     steps:
-    - name: Checkout current code from 2ndbillingcycle/specialsounds
-      uses: actions/checkout@master
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          # build-essential is already installed:
+          # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/software-installed-on-github-hosted-runners#ubuntu-1804-lts
+          sudo apt-get install luajit
+          # It's unlikely an existing lua interpreter is installed, but this does set up the idea
+          # of how I'd have multiple lua interpreters installed, and switch between them for
+          # matrix job runs, if that ever needs to happen
+          # Alternatively, I could manually symlink luajit to lua
+          sudo update-alternatives --install /usr/bin/lua lua-interpreter "$(which luajit)" 120
+          sudo update-alternatives --set lua-interpreter "$(which luajit)"
+          # Install luarocks after LuaJIT, just in case it gets funny with installing its own interpreter
+          # and configuring itself for that one
+          sudo apt-get install luarocks --no-install-recommends
+          eval $(luarocks path | tee -a ~/.bashrc)
+          # Set the variables to persist
+          echo "::set-env name=LUA_PATH::${LUA_PATH}"
+          echo "::set-env name=LUA_CPATH::${LUA_CPATH}"
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        # build-essential is already installed:
-        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/software-installed-on-github-hosted-runners#ubuntu-1804-lts
-        sudo apt-get install luajit
-        # It's unlikely an existing lua interpreter is installed, but this does set up the idea
-        # of how I'd have multiple lua interpreters installed, and switch between them for
-        # matrix job runs, if that ever needs to happen
-        # Alternatively, I could manually symlink luajit to lua
-        sudo update-alternatives --install /usr/bin/lua lua-interpreter "$(which luajit)" 120
-        sudo update-alternatives --set lua-interpreter "$(which luajit)"
-        # Install luarocks after LuaJIT, just in case it gets funny with installing its own interpreter
-        # and configuring itself for that one
-        sudo apt-get install luarocks --no-install-recommends
-        # Will this work with the following steps?
-        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#about-environment-variables
-        eval $(luarocks path | tee -a ~/.bashrc)
+      - name: Download list of LuaCov releases; save luarocks version
+        run: |
+          curl -L https://api.github.com/repos/keplerproject/luacov/tags > luacov_releases.json
+          luarocks --version > luarocks_version
 
-    - name: Download list of LuaCov releases
-      run: |
-        curl -L https://api.github.com/repos/keplerproject/luacov/tags > luacov_releases.json
+      # Apparently, if there's no cache for this key, the action will wait untilt he end of the run
+      # and save the stuff in the path under the key as a new cache:
+      # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows#using-the-cache-action
+      - name: Cache install dependencies
+        id: cache
+        uses: actions/cache@v1.1.0
+        with:
+          # A directory to store and save the cache
+          path: ~/.luarocks
+          # An explicit key for restoring and saving the cache
+          key: ${{ runner.os }}-luarocks-${{ hashFiles('luacov_releases.json') }}-${{ hashFiles('luarocks_version') }}
+          # An ordered list of keys to use for restoring the cache if no cache hit occurred for key
+          #restore-keys: # optional
 
-    # Apparently, if there's no cache for this key, the action will wait untilt he end of the run
-    # and save the stuff in the path under the key as a new cache:
-    # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows#using-the-cache-action
-    - name: Cache install dependencies
-      id: cache
-      uses: actions/cache@v1.1.0
-      with:
-        # A directory to store and save the cache
-        path: ~/.luarocks
-        # An explicit key for restoring and saving the cache
-        key: ${{ runner.os }}-luarocks-${{ hashFiles('luacov_releases.json') }}
-        # An ordered list of keys to use for restoring the cache if no cache hit occurred for key
-        #restore-keys: # optional
+      - name: Build cluacov if it's not in the cache
+        # https://github.com/actions/cache#Skipping-steps-based-on-cache-hit
+        if: steps.cache.outputs.cache-hit != "true"
+        run: |
+          luarocks install cluacov
+          # https://stackoverflow.com/a/11621788/5059062
+          eval $(echo 'export PATH="${PATH}:$(dirname ~/.luarocks/bin/luacov)"' | tee -a ~/.bashrc)
+          echo "::set-env name=PATH::${PATH}"
+      
+      - name: Remove version files
+        run: rm luarocks_version luacov_releases.json
 
-    - name: Build luacov if it's not in the cache
-      # https://github.com/actions/cache#Skipping-steps-based-on-cache-hit
-      if: steps.cache.outputs.cache-hit != "true"
-      run: |
-        luarocks install cluacov
-        # https://stackoverflow.com/a/11621788/5059062
-        eval $(echo 'export PATH="${PATH}:$(dirname ~/.luarocks/bin/luacov)"' | tee -a ~/.bashrc)
+      - name: Build and run tests
+        # Decribed somewhere in here:
+        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#jobsjob_idstepsrun
+        working-directory: ./src
+        run: |
+          # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action."
+          # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#default-environment-variables
+          # Also: https://help.github.com/en/actions/automating-your-workflow-with-github-actions/contexts-and-expression-syntax-for-github-actions#github-context
+          # Not needed with `working-directory`
+          #pushd specialsounds/src/
+          lua -lluacov -e "test=1 build=1" build.lua
+          luacov
+          #popd
 
-    - name: Run tests
-      run: |
-        # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action.""
-        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#default-environment-variables
-        pushd specialsounds/src/
-        lua -lluacov -e "test=1" build.lua
-        luacov
-        popd
+      - name: Upload test coverage to codecov.io
+        uses: codecov/codecov-action@master
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }} #required
+          file: ./src/luacov.report.out #optional
+          #flags: tests #optional
+          #name: codecov-umbrella #optional
+          #yml: ./codecov.yml #optional
+          fail_ci_if_error: true #optional (default = false)
+      
+      - name: Did this run because of a tag with "release" in the name on master that either results in an incremented version that is greater than the current release, and/or points to the commit at the tip of master?
+        # "create" events are triggered by branch and tag creation
+        # We only care if a tag was created, so we check to make sure this is a tag event
+        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/events-that-trigger-workflows#create-event-create
+        # https://developer.github.com/v3/activity/events/types/#createevent
+        if: github.event.ref_type == "tag" && contains(github.ref, "release")
+        run: |
+          git describe --exact-match --match "release" && \
+            echo "::set-env name=DO_RELEASE::true"
 
-    - name: Upload test coverage to codecov.io
-      uses: codecov/codecov-action@master
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }} #required
-        file: ./src/luacov.report.out #optional
-        #flags: tests #optional
-        #name: codecov-umbrella #optional
-        #yml: ./codecov.yml #optional
-        fail_ci_if_error: true #optional (default = false)
-  build:
-  release:
+      - name: Bump version
+        if: env.DO_RELEASE
+        working-directory: ./src
+        run: |
+          lua -e "bumpversion=1" build.lua
+        
+      - name: Move `release` commit to `v...`, pointing to a commit that includes the built SpecialSounds.lua and version-bumped header.lua

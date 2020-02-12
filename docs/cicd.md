@@ -305,3 +305,59 @@ Before putting it all together, I want to review how these workflows should be t
 I kind of worry that that might go over [the usage limits](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/about-github-actions#usage-limits), but I don't think this repository currently, or will ever, see enough activity to have to worry about that.
 
 Actually, I don't think 1000 API calls in 1 hour is going to be possible, as it seems there's no weekly or daily limit on the number of times the CI can be triggered.
+
+---
+
+Ha! I just assumed that being able to attach a file to comments was part of the GitHub API, [but sadly, it is not](https://github.com/isaacs/github/issues/1133#issuecomment-394363958).
+
+It looks like it won't make sense to just do a build, then.
+
+Also, I'm not sure how to not duplicate setup across jobs, without making it one job with lots of `if:`s.
+
+---
+
+So I'm trying the "everything in one job" approach. That means the job should run on every push, pull_request, and create event, but should only do releases if:
+
+- The SHA of the current event is pointed to by an annotated tag with "release" in the name
+- That commit SHA is in the history for the repo's default branch (might change from master to something else)
+- I created the tag, and it has a valid GPG signature
+
+Except for the fact that "default branch" is not a `git` concept, I don't think, the above could be done with these `git` commands:
+
+```bash
+export TAG_NAME="$(git describe --abbrev=0 --exact-match --match 'release')"
+export TAG_SHA="$(git show-ref --tags --hash ${TAG_NAME})"
+git branch --contains "${TAG_SHA}"
+git verify-tag "${TAG_SHA}"
+```
+
+---
+
+My current worry is that, with tags, someone could tag a non-`master` branch and trigger the build system because the tagged commit is "in `master`'s history", thus pushing the build from that commit into a release.
+
+Mainly, I'm worried about "what if I wanted to make changes to an older version?"
+
+While I can't predict the future, I don't plan on doing anything of the sort, so while I could worry about selecting a [`git` branch strategy](https://docs.microsoft.com/en-us/azure/devops/repos/git/git-branching-guidance?view=azure-devops), I won't.
+
+In software with multiple, simultaneously maintained versions, a [versioning scheme](https://en.wikipedia.org/wiki/Software_versioning#Schemes) is used to organize changes. A lot of people like [Semantic Versioning](https://semver.org/) and [Time-Based Versioning](https://calver.org/).
+
+For the purpose of bringing changes to multiple versions of software, being able to indicate differences between the features and interfaces is useful for people using the software.
+
+I, however, don't currently have any interest in supporting multiple versions.
+
+I am using a single version number that increases monotonically.
+
+This means that all changes made to the software modify the feature set that is "current", and no changes can exist with previous feature/bug sets of the software.
+
+For this reason, I don't have to worry about stray tags, as tags marking a new version must have one of two qualities:
+
+- They point to the tip of the current master
+- The incremented version of the software is strictly greater than the [currently released version](https://github.com/2ndBillingCycle/specialsounds/releases/latest) of the software
+
+Hopefully, it meets both requirements.
+
+Fortunately, these are easy to encode.
+
+It might be easier to employ a different release strategy, though, where a pull request against master triggers a build-test-release cycle.
+
+For all of these, I would want to ensure that only actions triggered by me could result in a release, in case, for some reason, someone decides they want to contribute to this.

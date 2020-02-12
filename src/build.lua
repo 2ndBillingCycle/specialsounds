@@ -73,32 +73,30 @@ local emit = require "emit"
 
 -- NOTE: Changes line endings to CRLF :(
 rock.bumpver = function ()
-  -- If the global variable bumpver is not set, do nothing
-  if not bumpver then return nil, emit.err("bumpver not set; won't bump") end
   local handle = assert(io.open("header.lua", "r"))
   local file = handle:read("*all")
   assert(handle:close())
   if not file then
-    emit.err("Empty header.lua")
-    return false
+    return nil, emit.err("Empty header.lua")
   end
   -- Matching line used to be as below, witht he match wrapped in newlines so as to match
   -- ONLY the version string no a single line, as opposed to one in a comment somewhere,
   -- but LuaJIT doesn't like that
   --local ver = file:match("\nrock%.version = \"([0-9]+)\"\n")
   local ver = file:match("rock%.version = \"([0-9]+)\"")
+  local new_ver = 0
   local line = ""
   if ver and type(tonumber(ver)) == "number" then
-    ver = tostring(ver + 1)
-    line = ("rock.version = \"%s\""):format(ver)
+    new_ver = tostring(ver + 1)
+    line = ("rock.version = \"%s\""):format(new_ver)
   else
     error("Can't find version number")
   end
-  new_file = file:gsub("rock%.version = \"([0-9]+)\"", "rock.version = \""..ver.."\"")
+  new_file = file:gsub("rock%.version = \"([0-9]+)\"", "rock.version = \""..new_ver.."\"")
   local handle = assert(io.open("header.lua", "w"))
   assert(handle:write(new_file))
   assert(handle:close())
-  return true
+  return new_ver
 end
   
 
