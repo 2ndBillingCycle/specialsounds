@@ -87,7 +87,7 @@ jobs:
           #yml: ./codecov.yml #optional
           fail_ci_if_error: true #optional (default = false)
       
-      - name: Did this run because of a tag with "release" in the name on master that either results in an incremented version that is greater than the current release, and/or points to the commit at the tip of master?
+      - name: Did this action execute because of a tag with "release" in the name on master that either results in an incremented version that is greater than the current release, and/or points to the commit at the tip of master?
         # "create" events are triggered by branch and tag creation
         # We only care if a tag was created, so we check to make sure this is a tag event
         # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/events-that-trigger-workflows#create-event-create
