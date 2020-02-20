@@ -1,16 +1,16 @@
 name: Building and Testing
 
-#on:
-#  push:
-#  pull_request:
-#    types:
-## https://help.github.com/en/actions/reference/events-that-trigger-workflows#pull-request-event-pull_request
-#      - opened
-#      - synchronize
-#      - reopened
-#      - closed
-#    branch:
-#      - master
+on:
+  push:
+  pull_request:
+    types:
+# https://help.github.com/en/actions/reference/events-that-trigger-workflows#pull-request-event-pull_request
+      - opened
+      - synchronize
+      - reopened
+      - closed
+    branch:
+      - master
 
 jobs:
   build_test_and_maybe_release:
@@ -108,7 +108,7 @@ jobs:
           # Then we confirm the tag signature is valid, and set the environment
           # variable for the following workflow steps if it is
           git describe --exact-match --match 'v*'
-          git tag -v "$(git describe --exact-match --match 'v*')" && \
+          git tag -v "$(git describe --exact-match --match 'v*' --abbrev=0)" && \
             echo "::set-env name=DO_RELEASE::true"
 
       - name: Does the tag name match the current version in header.lua?
@@ -122,8 +122,32 @@ jobs:
           end
           EOF
 
-      - name: Make a release
+      - name: Grab most recent tag name and message
+        run: |
+          export TAG_NAME="$(git describe --match 'v*' --abbrev=0)"
+          # Multiline: https://github.com/actions/starter-workflows/issues/68#issuecomment-581479448
+          export TAG_MESSAGE=$(git log -n 1 --format="%B" --no-notes ${TAG_NAME} | sed -e 's/\n/%0A/g')
+          echo "::set-env name=TAG_NAME::${TAG_NAME}"
+          echo "::set-env name=TAG_MESSAGE::${TAG_MESSAGE}"
+
+      - name: Make release
         if: env.DO_RELEASE
+        id: make_release
+        uses: action/create-release@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: ${{ env.TAG_NAME }}
+          body: ${{ env.TAG_MESSAGE }}
+          draft: false
+          prerelease: false
 
       - name: Add the built SpecialSounds.lua to the release as an asset
         if: env.DO_RELEASE
+        id: upload_asset
+        uses: action/upload-release-asset@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.make_release.outputs.upload_url }}
