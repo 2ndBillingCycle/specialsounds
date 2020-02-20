@@ -133,7 +133,7 @@ jobs:
       - name: Make release
         if: env.DO_RELEASE
         id: make_release
-        uses: action/create-release@master
+        uses: actions/create-release@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
