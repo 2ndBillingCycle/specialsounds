@@ -146,7 +146,7 @@ jobs:
       - name: Add the built SpecialSounds.lua to the release as an asset
         if: env.DO_RELEASE
         id: upload_asset
-        uses: action/upload-release-asset@master
+        uses: actions/upload-release-asset@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
