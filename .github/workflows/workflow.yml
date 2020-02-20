@@ -96,10 +96,10 @@ jobs:
         if: github.event_name == "pull_request" && github.event.author_association == "OWNER" && github.event.merged == "true"
         # Then we confirm that a tag, signed by the author, points to this merged commit
         run: |
-					# We're using jq and curl to interact with the GitHub API:
-					# https://stedolan.github.io/jq/
-					# https://curl.haxx.se/docs/manpage.html
-					sudo apt-get install -y jq curl
+          # We're using jq and curl to interact with the GitHub API:
+          # https://stedolan.github.io/jq/
+          # https://curl.haxx.se/docs/manpage.html
+          sudo apt-get install -y jq curl
 
           # First, we download the PGP key GitHub has for the repo owner
           curl -sq https://api.github.com/users/${{ github.event.head.repo.owner.login }}/gpg_keys | \
