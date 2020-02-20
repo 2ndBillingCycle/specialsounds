@@ -70,6 +70,7 @@ Also, since Lua doesn't have a native understanding of directories, it'd be easi
 
 local rock = {}
 local emit = require "emit"
+local header = require "header"
 
 -- NOTE: Changes line endings to CRLF :(
 rock.bumpver = function ()
@@ -85,10 +86,8 @@ rock.bumpver = function ()
   --local ver = file:match("\nrock%.version = \"([0-9]+)\"\n")
   local ver = file:match("rock%.version = \"([0-9]+)\"")
   local new_ver = 0
-  local line = ""
   if ver and type(tonumber(ver)) == "number" then
     new_ver = tostring(ver + 1)
-    line = ("rock.version = \"%s\""):format(new_ver)
   else
     error("Can't find version number")
   end
@@ -98,7 +97,14 @@ rock.bumpver = function ()
   assert(handle:close())
   return new_ver
 end
-  
+
+rock.bumped_ver = function ()
+  if not type(header.version) == "string" then error("header.version needs to be a string") end
+
+  return tostring(
+    tonumber(header.version) + 1
+  )
+end
 
 rock.run = function ()
   local files = {
@@ -165,7 +171,6 @@ rock.run = function ()
 end
 
 if test    then local test = require "test" assert(test.run())     end
-if bumpver then                             assert(rock.bumpver()) end
 if build   then                             assert(rock.run())     end
 
 return rock

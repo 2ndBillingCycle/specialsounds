@@ -111,10 +111,19 @@ jobs:
           git tag -v "$(git describe --exact-match --match 'v*')" && \
             echo "::set-env name=DO_RELEASE::true"
 
-      - name: Bump version if not already bumped
+      - name: Does the tag name match the current version in header.lua?
         if: env.DO_RELEASE
         working-directory: ./src
         run: |
-          lua -e "bumpversion=1" build.lua
-        
-      - name: Move `release` commit to `v...`, pointing to a commit that includes the built SpecialSounds.lua and version-bumped header.lua
+          lua - "$(git describe --exact-match --match 'v*' --abbrev=0)" <<EOF
+          local header = require "header"
+          if header.version ~= arg[1] then
+            error("Current version in header.lua does not match the tag name")
+          end
+          EOF
+
+      - name: Make a release
+        if: env.DO_RELEASE
+
+      - name: Add the built SpecialSounds.lua to the release as an asset
+        if: env.DO_RELEASE

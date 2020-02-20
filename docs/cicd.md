@@ -423,3 +423,43 @@ However, GitHub provides an API for [retrieving user's PGP keys](https://develop
 ```bash
 curl -sq https://api.github.com/users/2ndbillingcycle/gpg_keys | jq -r ".[0].raw_key" | gpg --import
 ```
+
+---
+
+I was still thinking along the lines of automatic version bumping during the release action, however, since the merge commit will need to be tagged with a tag named after the new version, it wouldn't make sense to tag a version of the repository with an out-of-date version in `src/header.lua`.
+
+This is the action I previously had, doing a conditional bump:
+
+```yaml
+- name: Bump version if not already bumped
+  if: env.DO_RELEASE
+  working-directory: ./src
+  run: |
+    lua - "$(git describe --exact-match --match 'v*' --abbrev=0)" <<EOF
+    local header = require "header"
+    -- If the current tag name doesn't match the current version,
+    -- bump the current version
+    if header.version ~= arg[1] then
+      local build = require "build"
+      build.bumpver()
+    end
+    -- Check to make sure the bumped version matches the tag name
+    package.loaded.header = nil
+    header = require "header"
+    if header.version == arg[1] then
+      os.exit(0)
+    else
+     error("Tag name doesn't match current or bumped version")
+    end
+    EOF
+```
+
+---
+
+If part of the release process is making sure there's an up-to-date `SpecialSounds.lua` file in the repo, at the time of release, so that the tag marking the release points to a commit with that release's build of `SpecialSounds.lua` present in the tree, then it needs to be present _before_ the release is triggered, unless we're willing to move tags around.
+
+I could add it as part of the local merge commit, for now.
+
+Ideally, though, the release process would need to be tweaked a bit.
+
+Or there just wouldn't be a "built" `SpecialSounds.lua` in the repo. This would mirror what you'd expect in a project that produces a package or compiled binary: it wouldn't be in the repo's tree.
