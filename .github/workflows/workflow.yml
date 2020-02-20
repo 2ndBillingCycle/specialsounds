@@ -2,7 +2,13 @@ name: Building and Testing
 
 #on:
 #  push:
-#  tags:
+#  pull_request:
+#    types:
+## https://help.github.com/en/actions/reference/events-that-trigger-workflows#pull-request-event-pull_request
+#      - opened
+#      - synchronize
+#      - reopened
+#      - closed
 #    branch:
 #      - master
 
@@ -64,18 +70,15 @@ jobs:
         run: rm luarocks_version luacov_releases.json
 
       - name: Build and run tests
+        # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action."
+        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#default-environment-variables
+        # Also: https://help.github.com/en/actions/automating-your-workflow-with-github-actions/contexts-and-expression-syntax-for-github-actions#github-context
         # Decribed somewhere in here:
         # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/workflow-syntax-for-github-actions#jobsjob_idstepsrun
         working-directory: ./src
         run: |
-          # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action."
-          # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables#default-environment-variables
-          # Also: https://help.github.com/en/actions/automating-your-workflow-with-github-actions/contexts-and-expression-syntax-for-github-actions#github-context
-          # Not needed with `working-directory`
-          #pushd specialsounds/src/
           lua -lluacov -e "test=1 build=1" build.lua
           luacov
-          #popd
 
       - name: Upload test coverage to codecov.io
         uses: codecov/codecov-action@master
@@ -87,17 +90,22 @@ jobs:
           #yml: ./codecov.yml #optional
           fail_ci_if_error: true #optional (default = false)
       
-      - name: Did this action execute because of a tag with "release" in the name on master that either results in an incremented version that is greater than the current release, and/or points to the commit at the tip of master?
-        # "create" events are triggered by branch and tag creation
-        # We only care if a tag was created, so we check to make sure this is a tag event
-        # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/events-that-trigger-workflows#create-event-create
-        # https://developer.github.com/v3/activity/events/types/#createevent
-        if: github.event.ref_type == "tag" && contains(github.ref, "release")
+      - name: Did this action execute because of a merged pull request with a tag, signed by the repo owner, pointing to the new merge commit?
+        # We first test if this is a pull_request being closed, and if the closer is the repo owner
+        # I am using the example data structure here: https://developer.github.com/v3/pulls/#response
+        if: github.event_name == "pull_request" && github.event.author_association == "OWNER" && github.event.merged == "true"
+        # Then we confirm that a tag, signed by the author, points to this merged commit
         run: |
-          git describe --exact-match --match "release" && \
+          # First, we need to find the tag signer's PGP key ID
+          # Then we download that signer's PGP key ID
+          # Then we verify the tag author's email is in the PGP key's list of IDs
+          # Finally, we confirm the tag signature is valid, and set the environment
+          # vaariable for the following workflow steps if it is
+          export TAG_NAME="$(git describe --exact-match --match "v*")"
+          git tag -v "${TAG_NAME}" && \
             echo "::set-env name=DO_RELEASE::true"
 
-      - name: Bump version
+      - name: Bump version if not already bumped
         if: env.DO_RELEASE
         working-directory: ./src
         run: |

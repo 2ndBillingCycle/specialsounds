@@ -361,3 +361,15 @@ Fortunately, these are easy to encode.
 It might be easier to employ a different release strategy, though, where a pull request against master triggers a build-test-release cycle.
 
 For all of these, I would want to ensure that only actions triggered by me could result in a release, in case, for some reason, someone decides they want to contribute to this.
+
+---
+
+It'll be way easier to trigger builds and tests on any push event or pull_request event, and trigger releases on pull_request "closed" events.
+
+That will be much more like all other projects.
+
+Plus, it'll simplify the whole release tagging process, removing the need to mangle tags. Instead, I can [checkout and merge the pull request locally](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/checking-out-pull-requests-locally#modifying-an-active-pull-request-locally), so that I can push the merge and a tag on the release, all in one go.
+
+That way, I can **hopefully** merge pull requests to master without triggering the release process, and only trigger releases when a pull_request is closed, with a tag pointing to that merge commit, signed by me.
+
+The "tagged with my PGP signature" part will have to be validated in the action. Is there a way to end the Action early without failing it? Or rather, without having it send me an email, notifying me of a failure in the Action run?
