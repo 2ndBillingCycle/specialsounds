@@ -23,16 +23,9 @@ jobs:
           sudo apt-get update
           # build-essential is already installed:
           # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/software-installed-on-github-hosted-runners#ubuntu-1804-lts
-          sudo apt-get install luajit
-          # It's unlikely an existing lua interpreter is installed, but this does set up the idea
-          # of how I'd have multiple lua interpreters installed, and switch between them for
-          # matrix job runs, if that ever needs to happen
-          # Alternatively, I could manually symlink luajit to lua
+          sudo apt-get install --no-install-recommends luajit luarocks
           sudo update-alternatives --install /usr/bin/lua lua-interpreter "$(which luajit)" 120
           sudo update-alternatives --set lua-interpreter "$(which luajit)"
-          # Install luarocks after LuaJIT, just in case it gets funny with installing its own interpreter
-          # and configuring itself for that one
-          sudo apt-get install luarocks --no-install-recommends
           eval $(luarocks path | tee -a ~/.bashrc)
           # Set the variables to persist
           echo "::set-env name=LUA_PATH::${LUA_PATH}"
@@ -63,7 +56,7 @@ jobs:
         run: |
           luarocks install --local cluacov
           # https://stackoverflow.com/a/11621788/5059062
-          eval $(echo 'export PATH="${PATH}:$(dirname ~/.luarocks/bin/luacov)"' | tee -a ~/.bashrc)
+          eval $(echo 'export PATH=${PATH}:$(dirname ~/.luarocks/bin/luacov)' | tee -a ~/.bashrc)
           echo "::set-env name=PATH::${PATH}"
       
       - name: Remove version files
