@@ -373,3 +373,53 @@ Plus, it'll simplify the whole release tagging process, removing the need to man
 That way, I can **hopefully** merge pull requests to master without triggering the release process, and only trigger releases when a pull_request is closed, with a tag pointing to that merge commit, signed by me.
 
 The "tagged with my PGP signature" part will have to be validated in the action. Is there a way to end the Action early without failing it? Or rather, without having it send me an email, notifying me of a failure in the Action run?
+
+---
+
+I _could_ use `bash` to perform the actions that I need to happen, but I could also use Lua for a lot of the stuff:
+
+```bash
+lua - arg1 arg2 <<EOF
+for i,val in ipairs(arg) do
+    print(val)
+end
+print(("$(git describe --match 'v*' --abbrev=0)"):match"v([0-9]+)")
+```
+
+---
+
+I decided I wanted to verify the signature of the tag, and to do this, I need to have the public portion of the PGP key that signed the tag.
+
+It turns out that the signature message in the tag only contains the key's ID.
+
+So I was trying to figure out a way to retrieve the GPG, and ended up running into this brick wall:
+
+```sh
+$ gpg --homedir ../test --keyserver pgp.mit.edu --recv-keys D60A37D662CA990968060DCD02670902363E71FC
+gpg: key 949F843478EDD24B: public key "SecondBillingCycle <2nd@2ndbillingcycle.stream>" imported
+gpg: Total number processed: 1
+gpg:               imported: 1
+$ gpg --homedir ../test --keyserver pool.sks-keyservers.net --recv-keys D60A37D662CA990968060DCD02670902363E71FC
+gpg: keyserver receive failed: No data
+```
+
+Why, oh why, does this happen? I'm not up for digging into this right now. What matters is it works.
+
+---
+
+So I was going to try to extract the key ID from the tag's signature, and then force `gpg` to download the associated PGP key, _then_ compare the user ID with the repo owner's name and email. The first parts I was going to do like so:
+
+```bash
+gpg --auto-key-retrieve --keyserver pgp.mit.edu --verify <<EOFEOF || true
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
+$(git show --format='' -s $(git describe --exact-match))
+EOFEOF
+```
+
+However, GitHub provides an API for [retrieving user's PGP keys](https://developer.github.com/v3/users/gpg_keys/#list-gpg-keys-for-a-user). [`jq`](https://stedolan.github.io/jq/) can be used to extract just the raw PGP key from the response:
+
+```bash
+curl -sq https://api.github.com/users/2ndbillingcycle/gpg_keys | jq -r ".[0].raw_key" | gpg --import
+```

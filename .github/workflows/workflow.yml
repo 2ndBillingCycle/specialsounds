@@ -96,13 +96,19 @@ jobs:
         if: github.event_name == "pull_request" && github.event.author_association == "OWNER" && github.event.merged == "true"
         # Then we confirm that a tag, signed by the author, points to this merged commit
         run: |
-          # First, we need to find the tag signer's PGP key ID
-          # Then we download that signer's PGP key ID
-          # Then we verify the tag author's email is in the PGP key's list of IDs
-          # Finally, we confirm the tag signature is valid, and set the environment
-          # vaariable for the following workflow steps if it is
-          export TAG_NAME="$(git describe --exact-match --match "v*")"
-          git tag -v "${TAG_NAME}" && \
+					# We're using jq and curl to interact with the GitHub API:
+					# https://stedolan.github.io/jq/
+					# https://curl.haxx.se/docs/manpage.html
+					sudo apt-get install -y jq curl
+
+          # First, we download the PGP key GitHub has for the repo owner
+          curl -sq https://api.github.com/users/${{ github.event.head.repo.owner.login }}/gpg_keys | \
+            jq -r ".[0].raw_key" | \
+            gpg --import
+          # Then we confirm the tag signature is valid, and set the environment
+          # variable for the following workflow steps if it is
+          git describe --exact-match --match 'v*'
+          git tag -v "$(git describe --exact-match --match 'v*')" && \
             echo "::set-env name=DO_RELEASE::true"
 
       - name: Bump version if not already bumped

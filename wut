@@ -1,0 +1,19 @@
+gpg: Signature made Wed 16 Oct 2019 08:14:49 AM CDT
+gpg:                using RSA key D60A37D662CA990968060DCD02670902363E71FC
+gpg: Can't check signature: No public key
+object 902f78eab62d5f26d22992e47049c107f0aa4dfb
+type commit
+tag v7
+tagger 2ndBillingCycle <2nd@2ndbillingcycle.stream> 1571231535 -0500
+
+Better /delete and no more %%(
+
+/delete now also treats the server and channel name as patterns
+
+( and ) inside a parenthesis_group no longer have to be double escaped,
+but the changes required to make that happen weren't fully tested. It
+seems to work.
+
+Version bumped since behavious changed.
+
+Also, better README.me
