@@ -20,7 +20,9 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          sudo apt-get update
+          # This returned an error on two separate runs:
+          # sudo apt-get update
+          # https://github.com/2ndBillingCycle/specialsounds/runs/459091758?check_suite_focus=true#step:2:63
           # build-essential is already installed:
           # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/software-installed-on-github-hosted-runners#ubuntu-1804-lts
           sudo apt-get install --no-install-recommends luajit luarocks
