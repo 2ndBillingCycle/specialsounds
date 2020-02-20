@@ -59,7 +59,7 @@ jobs:
 
       - name: Build cluacov if it's not in the cache
         # https://github.com/actions/cache#Skipping-steps-based-on-cache-hit
-        if: steps.cache.outputs.cache-hit != "true"
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           luarocks install cluacov
           # https://stackoverflow.com/a/11621788/5059062
@@ -93,7 +93,7 @@ jobs:
       - name: Did this action execute because of a merged pull request with a tag, signed by the repo owner, pointing to the new merge commit?
         # We first test if this is a pull_request being closed, and if the closer is the repo owner
         # I am using the example data structure here: https://developer.github.com/v3/pulls/#response
-        if: github.event_name == "pull_request" && github.event.author_association == "OWNER" && github.event.merged == "true"
+        if: github.event_name == 'pull_request' && github.event.author_association == 'OWNER' && github.event.merged == 'true'
         # Then we confirm that a tag, signed by the author, points to this merged commit
         run: |
           # We're using jq and curl to interact with the GitHub API:
