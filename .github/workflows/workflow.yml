@@ -57,6 +57,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           luarocks install --local cluacov
+          luarocks install --local luafilesystem # Needed for luacov: includeuntestedfiles
           # https://stackoverflow.com/a/11621788/5059062
           eval $(echo 'export PATH=${PATH}:$(dirname ~/.luarocks/bin/luacov)' | tee -a ~/.bashrc)
           echo "::set-env name=PATH::${PATH}"
