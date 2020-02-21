@@ -18,10 +18,6 @@ jobs:
     env:
       DO_RELEASE: false
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@master
-        # This, by default, checks out 1 commit, and sets up git with the GITHUB_TOKEN
-
       - name: Install dependencies
         run: |
           # This returned an error on two separate runs:
@@ -39,11 +35,16 @@ jobs:
 
       - name: Download list of LuaCov releases; save luarocks version
         run: |
-          echo $(pwd)
+          # https://help.github.com/en/actions/reference/development-tools-for-github-actions#set-a-debug-message-debug
+          echo "::debug::$(pwd)"
           curl -L https://api.github.com/repos/keplerproject/luacov/tags > luacov_releases.json
           luarocks --version > luarocks_version
 
-      # Apparently, if there's no cache for this key, the action will wait untilt he end of the run
+      - name: Checkout repository
+        uses: actions/checkout@master
+        # This, by default, checks out 1 commit, and sets up git with the GITHUB_TOKEN
+
+      # Apparently, if there's no cache for this key, the action will wait until the end of the run
       # and save the stuff in the path under the key as a new cache:
       # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows#using-the-cache-action
       - name: Cache install dependencies
@@ -63,9 +64,9 @@ jobs:
         run: |
           luarocks install --local cluacov
           luarocks install --local luafilesystem # Needed for luacov: includeuntestedfiles
+          # https://help.github.com/en/actions/reference/development-tools-for-github-actions#add-a-system-path-add-path
           # https://stackoverflow.com/a/11621788/5059062
-          eval $(echo 'export PATH=${PATH}:$(dirname ~/.luarocks/bin/luacov)' | tee -a ~/.bashrc)
-          echo "::set-env name=PATH::${PATH}"
+          echo "::add-path::$(dirname ~/.luarocks/bin/luacov)"
       
       # Need to leave the file there, so that the cache action can use it to create a key
       # at the end of the run, if a cache miss happens
