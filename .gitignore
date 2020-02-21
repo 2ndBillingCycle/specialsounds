@@ -1,4 +1,4 @@
-src/luacov*
+luacov*
 
 saved.code-workspace
 Session.vim

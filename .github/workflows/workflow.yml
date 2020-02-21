@@ -62,8 +62,10 @@ jobs:
           eval $(echo 'export PATH=${PATH}:$(dirname ~/.luarocks/bin/luacov)' | tee -a ~/.bashrc)
           echo "::set-env name=PATH::${PATH}"
       
-      - name: Remove version files
-        run: rm luarocks_version luacov_releases.json
+      # Need to leave the file there, so that the cache action can use it to create a key
+      # at the end of the run, if a cache miss happens
+      # - name: Remove version files
+      #   run: rm luarocks_version luacov_releases.json
 
       - name: Checkout repository
         uses: actions/checkout@master
