@@ -112,7 +112,7 @@ jobs:
             echo "::set-env name=DO_RELEASE::true"
 
       - name: Does the tag name match the current version in header.lua?
-        if: env.DO_RELEASE
+        if: env.DO_RELEASE == 'true'
         working-directory: ./src
         run: |
           lua - "$(git describe --exact-match --match 'v*' --abbrev=0)" <<EOF
@@ -123,6 +123,7 @@ jobs:
           EOF
 
       - name: Grab most recent tag name and message
+        if: env.DO_RELEASE == 'true'
         run: |
           export TAG_NAME="$(git describe --match 'v*' --abbrev=0)"
           # Multiline: https://github.com/actions/starter-workflows/issues/68#issuecomment-581479448
@@ -131,7 +132,7 @@ jobs:
           echo "::set-env name=TAG_MESSAGE::${TAG_MESSAGE}"
 
       - name: Make release
-        if: env.DO_RELEASE
+        if: env.DO_RELEASE == 'true'
         id: make_release
         uses: actions/create-release@master
         env:
@@ -144,7 +145,7 @@ jobs:
           prerelease: false
 
       - name: Add the built SpecialSounds.lua to the release as an asset
-        if: env.DO_RELEASE
+        if: env.DO_RELEASE == 'true'
         id: upload_asset
         uses: actions/upload-release-asset@master
         env:
