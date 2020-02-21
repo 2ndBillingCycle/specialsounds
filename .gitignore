@@ -1,5 +1,7 @@
 luacov*
 luarocks_version
 
+work/
+
 saved.code-workspace
 Session.vim

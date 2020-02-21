@@ -78,10 +78,10 @@ rock.bumpver = function ()
   local file = handle:read("*all")
   assert(handle:close())
   if not file then
-    return nil, emit.err("Empty header.lua")
+    error("Empty header.lua")
   end
-  -- Matching line used to be as below, witht he match wrapped in newlines so as to match
-  -- ONLY the version string no a single line, as opposed to one in a comment somewhere,
+  -- Matching line used to be as below, with the match wrapped in newlines so as to match
+  -- ONLY the version string on a single line, as opposed to one in a comment somewhere,
   -- but LuaJIT doesn't like that
   --local ver = file:match("\nrock%.version = \"([0-9]+)\"\n")
   local ver = file:match("rock%.version = \"([0-9]+)\"")
@@ -99,7 +99,9 @@ rock.bumpver = function ()
 end
 
 rock.bumped_ver = function ()
-  if not type(header.version) == "string" then error("header.version needs to be a string") end
+  if not type(header.version) == "string" then
+    error("header.version needs to be a string")
+  end
 
   return tostring(
     tonumber(header.version) + 1
@@ -116,11 +118,11 @@ rock.run = function ()
     "main.lua",
   }
 
-  local outfile, file_error = io.open("SpecialSounds.lua", "w")
-  if outfile == nil then
-    emit.err(file_error)
-    return false
-  end
+  -- Make sure we can grab a filehandle for SpecialSounds.lua before doing the build
+  -- This truncates the file, whether we finish the function or not
+  local outfile = assert(io.open("SpecialSounds.lua", "w"))
+
+  -- Loop over the list of files
   for i,name in ipairs(files) do
     -- Check to make sure the file exists
     local file, file_error = io.open(name, "r")
@@ -166,11 +168,24 @@ rock.run = function ()
   end
   assert(outfile:close())
 
-  emit.info("Built")
-  return "Built"
+  return emit.info("Built")
 end
 
-if test    then local test = require "test" assert(test.run())     end
-if build   then                             assert(rock.run())     end
+-- If this block is reached from running this file as a script
+if _G.arg and type(arg[0]) == "string" and (arg[0]):match("build") then
+  for i,v in ipairs(arg) do
+    -- Swap around the index and the arg value so that it's easier to do
+    -- if arg.test then test.run() end
+    arg[v] = i
+  end
+
+  -- The ordering here is important:
+  -- Tests before modifying files
+  -- Bump version before concatenating all the files
+  -- Then generate a concatenated file
+  if arg.test    then local test = require "test" assert(test.run())     end
+  if arg.bumpver then                             assert(rock.bumpver()) end
+  if arg.build   then                             assert(rock.run())     end
+end
 
 return rock

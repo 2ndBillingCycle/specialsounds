@@ -323,4 +323,9 @@ rock.run = function ()
   return "tested"
 end
 
+-- If this was run as a script: lua test.lua,
+-- then just run the main function
+if _G.arg and type(arg[0]) == "string" and (arg[0]):match("test") then
+  assert(rock.run())
+end
 return rock
