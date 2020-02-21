@@ -18,6 +18,10 @@ jobs:
     env:
       DO_RELEASE: false
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@master
+        # This, by default, checks out 1 commit, and sets up git with the GITHUB_TOKEN
+
       - name: Install dependencies
         run: |
           # This returned an error on two separate runs:
@@ -35,6 +39,7 @@ jobs:
 
       - name: Download list of LuaCov releases; save luarocks version
         run: |
+          echo $(pwd)
           curl -L https://api.github.com/repos/keplerproject/luacov/tags > luacov_releases.json
           luarocks --version > luarocks_version
 
@@ -66,10 +71,6 @@ jobs:
       # at the end of the run, if a cache miss happens
       # - name: Remove version files
       #   run: rm luarocks_version luacov_releases.json
-
-      - name: Checkout repository
-        uses: actions/checkout@master
-        # This, by default, checks out 1 commit, and sets up git with the GITHUB_TOKEN
 
       - name: Build and run tests
         # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action."
