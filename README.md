@@ -1,4 +1,4 @@
-[![CI/CD Badge](https://github.com/2ndBillingCycle/specialsounds/workflows/Building%20and%20Testing/badge.svg)](https://github.com/2ndBillingCycle/specialsounds/actions) [![CodeCov coverage badge](https://codecov.io/gh/2ndBillingCycle/specialsounds/branch/refactor/graphs/badge.svg)](https://codecov.io/gh/2ndBillingCycle/specialsounds/branch/refactor)
+[![CI/CD Badge](https://github.com/2ndBillingCycle/specialsounds/workflows/Build%20and%20test/badge.svg)](https://github.com/2ndBillingCycle/specialsounds/actions) [![CodeCov coverage badge](https://codecov.io/gh/2ndBillingCycle/specialsounds/branch/refactor/graphs/badge.svg)](https://codecov.io/gh/2ndBillingCycle/specialsounds/branch/refactor)
 
 # SpecialSounds
 

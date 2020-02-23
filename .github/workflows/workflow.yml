@@ -1,4 +1,4 @@
-name: Building and Testing
+name: Build and test
 
 on:
   push:
@@ -67,6 +67,9 @@ jobs:
         run: |
           luarocks install --local cluacov
           luarocks install --local luafilesystem # Needed for luacov: includeuntestedfiles
+
+      - name: Set luacov path
+        run: |
           # https://help.github.com/en/actions/reference/development-tools-for-github-actions#add-a-system-path-add-path
           # https://stackoverflow.com/a/11621788/5059062
           echo "::add-path::$(dirname ~/.luarocks/bin/luacov)"
