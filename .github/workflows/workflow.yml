@@ -33,16 +33,14 @@ jobs:
           echo "::set-env name=LUA_PATH::${LUA_PATH}"
           echo "::set-env name=LUA_CPATH::${LUA_CPATH}"
 
-      - name: Download list of LuaCov releases; save luarocks version
+      # Manually doing a hash, as it seems https://github.com/actions/cache/issues/39#issuecomment-552252932 is still affecting me:
+      # https://github.com/2ndBillingCycle/specialsounds/runs/461221650?check_suite_focus=true#step:5:10
+      - name: Download list of LuaCov releases and concatenate with luarocks version for a hash for cacheing
         run: |
-          # https://help.github.com/en/actions/reference/development-tools-for-github-actions#set-a-debug-message-debug
-          echo "::debug::$(pwd)"
           curl -L https://api.github.com/repos/keplerproject/luacov/tags > luacov_releases.json
           luarocks --version > luarocks_version
-
-      - name: Checkout repository
-        uses: actions/checkout@master
-        # This, by default, checks out 1 commit, and sets up git with the GITHUB_TOKEN
+          echo "::set-env name=FILE_HASH_FOR_CACHE::$(cat luacov_releases.json luarocks_version | sha256sum | grep -Eo '\w+')"
+          rm luacov_releases.json luarocks_version
 
       # Apparently, if there's no cache for this key, the action will wait until the end of the run
       # and save the stuff in the path under the key as a new cache:
@@ -68,10 +66,9 @@ jobs:
           # https://stackoverflow.com/a/11621788/5059062
           echo "::add-path::$(dirname ~/.luarocks/bin/luacov)"
       
-      # Need to leave the file there, so that the cache action can use it to create a key
-      # at the end of the run, if a cache miss happens
-      # - name: Remove version files
-      #   run: rm luarocks_version luacov_releases.json
+      # This, by default, checks out 1 commit, and sets up git with the GITHUB_TOKEN
+      - name: Checkout repository
+        uses: actions/checkout@master
 
       - name: Build and run tests
         # "The workspace directory contains a subdirectory with a copy of your repository if your workflow uses the actions/checkout action."
