@@ -52,7 +52,7 @@ jobs:
           # A directory to store and save the cache
           path: ~/.luarocks
           # An explicit key for restoring and saving the cache
-          key: ${{ runner.os }}-luarocks-${{ hashFiles('**/luacov_releases.json') }}-${{ hashFiles('**/luarocks_version') }}
+          key: ${{ runner.os }}-luarocks-${{ env.FILE_HASH_FOR_CACHE }}
           # An ordered list of keys to use for restoring the cache if no cache hit occurred for key
           #restore-keys: # optional
 
