@@ -2,6 +2,11 @@ name: Building and Testing
 
 on:
   push:
+    paths-ignore:
+      - README.md
+      - CODE_OF_CONDUCT.md
+      - LICENSE
+      - "docs/**"
   pull_request:
     types:
 # https://help.github.com/en/actions/reference/events-that-trigger-workflows#pull-request-event-pull_request
@@ -90,7 +95,7 @@ jobs:
           file: ./src/luacov.report.out #optional
           #flags: tests #optional
           #name: codecov-umbrella #optional
-          #yml: ./codecov.yml #optional
+          yml: ./codecov.yml #optional
           fail_ci_if_error: true #optional (default = false)
       
       - name: Did this action execute because of a merged pull request with a tag, signed by the repo owner, pointing to the new merge commit?

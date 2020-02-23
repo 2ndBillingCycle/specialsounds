@@ -463,3 +463,9 @@ I could add it as part of the local merge commit, for now.
 Ideally, though, the release process would need to be tweaked a bit.
 
 Or there just wouldn't be a "built" `SpecialSounds.lua` in the repo. This would mirror what you'd expect in a project that produces a package or compiled binary: it wouldn't be in the repo's tree.
+
+---
+
+For now, we're not including the built `SpecialSounds.lua` in the repo, as the hope is that it eventually produces a build artifact.
+
+One goal I do have is to make include a "minimum requirements" plugin script that _only_ has `/ssound <pattern> "<filename>"`, and does what this project originally set out to do, but in the smallest number of lines of code. Not code golf, but something that can be posted as part of [the FuelRat's IRC Client Setup Guides](https://confluence.fuelrats.com/display/FRKB/IRC+Client+Setup+Guides) for easy copy and pasting.

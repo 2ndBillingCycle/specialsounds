@@ -1,3 +1,5 @@
+[![CI/CD Badge](https://github.com/2ndBillingCycle/specialsounds/workflows/Building%20and%20Testing/badge.svg)](https://github.com/2ndBillingCycle/specialsounds/actions) [![CodeCov coverage badge](https://codecov.io/gh/2ndBillingCycle/specialsounds/branch/refactor/graphs/badge.svg)](https://codecov.io/gh/2ndBillingCycle/specialsounds/branch/refactor)
+
 # SpecialSounds
 
 This is a plugin for [HexChat][].
@@ -10,13 +12,13 @@ The plugin is written in [Lua][]. On Windows, the normal installation of HexChat
 
 ![HexChat normal installation](https://i.imgur.com/SJ70WuY.png)
 
-On Linux, HexChat may require a separate package to be installed in or
+On Linux, HexChat may require a separate package to be installed (e.g. on Debian, the [`hexchat-lua`][hexchat-deb] package is required).
 
 ## Installation
 
-From [the releases page][releases], click on the assets dropdown and download the `SpecialSounds.lua` file into the HexChat `config/addons/` directory.
+From [the releases page][releases], click on the assets dropdown and download the `SpecialSounds.lua` file into the HexChat `config/addons/` directory, the location of which is described in [the HexChat documentation][hexchat-settings].
 
-If HexChat was installed as a portable app, the `config/` directory is located in the same place HexChat is installed. Otherwise, [the HexChat documentation][hexchat-settings] describes where to find it.
+If HexChat was installed as a portable app, the `config/` directory is located in the same place HexChat is installed.
 
 Then, from the HexChat text entry box, enter the following to load the plugin:
 
@@ -24,7 +26,7 @@ Then, from the HexChat text entry box, enter the following to load the plugin:
 /lua load SpecialSounds.lua
 ```
 
-This command is interpreted by HexChat, and will not be sent as a message, as long as `/` is the first character. Putting a space before `/` will send the command as a message to the current channel.
+This command is interpreted by HexChat, and will not be sent as a message, as long as `/` is the first character. Putting anything befor `/` , including a space, will send the command as a message to the current channel.
 
 The [HexChat documentation][hexchat-addons] has more instructions on installing and using plugins and addons.
 
@@ -32,7 +34,7 @@ The command to load this plugin can be set as a `Connect command` for a server i
 
 ![Connect Command set for an entry in Network List](https://i.imgur.com/sD1CvOw.png).
 
-This calls the command when connecting to the server, loading the plugin.
+This runs the command when connecting to the server, loading the plugin.
 
 
 ## Setup
@@ -43,7 +45,7 @@ This calls the command when connecting to the server, loading the plugin.
 /ssound [server name] #[channel name] sound <sound file> match <pattern>
 ```
 
-Where any `[`_`text between braces`_`]` is optional, and `<`_`text between angle brackets`_`>` is to be replaced with an actual value. The `[` `]` `<` `>` are left out when entering the command.
+Where any `[`_`text between braces`_`]` and `<`_`text between angle brackets`_`>` is to be replaced with an actual value, the `[]` indication an optional part that can be ommitted, and the `<>` indicating a required part. The `[` `]` `<` `>` are left out when entering the command.
 
 For example:
 
@@ -51,19 +53,19 @@ For example:
 /ssound fuelrats #fuelrats sound H:\signal.wav match SIGNAL
 ```
 
-Configures the plugin to watch the `#fuelrats` channel on the server `fuelrats`, and will play the file `H:\signal.wav` when a message has the word `SIGNAL` in it.
+This configures the plugin to watch the `#fuelrats` channel on the server `fuelrats`, and will play the file `H:\signal.wav` when a message has the word `SIGNAL` in it. Note that sound files must be `.wav` on Windows. See the [details below](#sound-files).
 
-The phrase `SIGNAL` can appear anywhere in any message from that channel (even in the middle of words), and each time a message is matched, the sound file will be played.
+The word `SIGNAL` can appear anywhere in any message from that channel (even in the middle of words, e.g. `My name is fkjnkSIGNALffkj` would match), and each time a message is matched, the sound file will be played.
 
-If the `[server name]`, `#[channel name]`, `<sound file>`, or `<pattern>` have spaces, they must be wrapped in parentheses:
+If the `[server name]`, `#[channel name]`, `<sound file>`, or `<pattern>` have spaces, they must be wrapped in parentheses. For example:
 
 ```
 (a phrase has spaces)
 ```
 
-This is because the `[server name]`, `#[channel name]`, and `<pattern>` are all (usually) treated as [Lua patterns][lua-patterns], which are explained in more detail [below](./README.md#lua-patterns).
+This is because the `[server name]`, `#[channel name]`, and `<pattern>` are all (usually) treated as [Lua patterns][lua-patterns], which are explained in more detail [below](#lua-patterns).
 
-Note that the `#` for a `#[channel name]` *must* be on the outside of the parentheses:
+Note that the `#` for a `#[channel name]` _must_ be on the outside of the parentheses:
 
 ```
 #(channel name)
@@ -83,17 +85,17 @@ If the command is typed into a channel, either the `[server name]`, the `#[chann
 
 This is convenient, because the plugin only sees the [hostname][] (see [Hostnames](./README.md#Hostnames) for more information) of the specific server that's hosting the IRC channel, and not what might show up in the HexChat Network List.
 
-As a consequence of this feature, if a `[server name]` needs to be configured as `sound` or `match`, or if it needs to begin with a `/`, it must be wrapped in parentheses. The following will not work:
+As a consequence of this feature, if a `[server name]` has the words `sound` or `match` in it, or if it needs to begin with a `/`, it must be wrapped in parentheses. The following will not work:
 
 ```
-/ssound match #channel sound (H:\sound wave.wav) match (hearing things)
+/ssound match #channel sound (H:\rustling noise.wav) match (hearing things)
 ```
 
 And the following error message will result:
 
 ```
 Parser error: Unexpected text
-/SSOUND match #channel sound (H:\sound wave.wav) match (hearing things)
+/SSOUND match #channel sound (H:\rustling noise.wav) match (hearing things)
                ^
 
 Sorry, could not understand command
@@ -102,13 +104,13 @@ Sorry, could not understand command
 But the following will work:
 
 ```
-/ssound (match) #channel sound (H:\sound wave.wav) match (hearing things)
+/ssound (match) #channel sound (H:\rustling noise.wav) match (hearing things)
 ```
 
 ```
 Server:  (match)
 Channel: #channel
-Sound:   (H:\sound wave.wav)
+Sound:   (H:\rustling noise.wav)
 Match:   (hearing things)
 ```
 
@@ -198,7 +200,7 @@ As an example, to match the text `I have a %! :-)`, it first needs to be wrapped
 
 This can be tedious, but hopefully doesn't come up much. If it does, and you want an option to treat the text as just text, and only have to worry about spaces, `(`, and `)`, please [open an issue][issue].
 
-Also, Lua patterns are case sensitive, so the `<pattern>` of `no` will *not* match `NOOOOO` or `No, stop`, but *will* match `That's enough!`.
+Also, Lua patterns are case sensitive, so the `<pattern>` of `no` will _not_ match `NOOOOO` or `No, stop`, but _will_ match `That's enough!`.
 
 ### Sound Files
 
@@ -353,6 +355,7 @@ It was created mainly for [The Fuel Rats][tfr], but can certainly be used for an
 [lua]: <https://www.lua.org/about.html>
 [ima-adpcm]: <https://en.wikipedia.org/wiki/Adaptive_differential_pulse-code_modulation>
 [libcanberra]: <https://salsa.debian.org/gnome-team/libcanberra>
+[hexchat-deb]: <https://packages.debian.org/buster/hexchat-lua>
 [audacity]: <https://www.audacityteam.org/>
 [import-audio]: <https://manual.audacityteam.org/man/importing_audio.html#formats>
 [export-audio]: <https://manual.audacityteam.org/man/file_export_dialog.html>
