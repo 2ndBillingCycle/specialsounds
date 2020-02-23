@@ -50,7 +50,7 @@ jobs:
       # Apparently, if there's no cache for this key, the action will wait until the end of the run
       # and save the stuff in the path under the key as a new cache:
       # https://help.github.com/en/actions/automating-your-workflow-with-github-actions/caching-dependencies-to-speed-up-workflows#using-the-cache-action
-      - name: Cache install dependencies
+      - name: Cache build and testing dependencies
         id: cache
         uses: actions/cache@v1.1.0
         with:
@@ -61,7 +61,7 @@ jobs:
           # An ordered list of keys to use for restoring the cache if no cache hit occurred for key
           #restore-keys: # optional
 
-      - name: Build cluacov if it's not in the cache
+      - name: Build dependencies for luacov if they're not in the cache
         # https://github.com/actions/cache#Skipping-steps-based-on-cache-hit
         if: steps.cache.outputs.cache-hit != 'true'
         run: |

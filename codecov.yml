@@ -12,15 +12,16 @@ codecov:
 coverage:
   precision: 2
   round: down
+  # Range of overall coverage required for the color green
   range: "90...100"
   status:
     project:
       default:
         # https://docs.codecov.io/docs/commit-status#section-basic-configuration
         # auto will use the coverage from the base commit (pull request base or parent
-        # commit) coverage to compare against.
+        # commit) coverage to compare against
         target: auto
-        # Allow the coverage to drop by X%, and posting a success status.
+        # Allow the coverage to drop by X%, and posting a success status
         threshold: 2%
 
 parsers:
