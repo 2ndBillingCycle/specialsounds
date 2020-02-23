@@ -202,6 +202,8 @@ rock.input_output_tests = function ()
 end
 
 rock.summarize_test_results = function (test_results)
+  -- flag to indicate if any failures or errors happened during testing
+  local all_passed = true
   emit.print("\nTest results:\n")
   local pass = {}
   local fail = {}
@@ -243,6 +245,7 @@ rock.summarize_test_results = function (test_results)
   end
   for name,tbl in pairs(pass) do
     if #fail[name] > 0 or #errs[name] > 0 then
+      all_passed = false
       emit.print("Results for %s\n", name)
     end
     for i,message in ipairs(fail[name]) do
@@ -267,7 +270,10 @@ error: %s
       errs[name].count
     )
   end
-  return true
+  -- If there was a failure or error, in any test, fail the whole thing.
+  -- If a test is supposed to fail, or error, wrap it in a function that checks for the
+  -- correct failure or error message.
+  return all_passed
 end
 
 rock.run = function ()
@@ -318,9 +324,11 @@ rock.run = function ()
   rock.input_output_tests()
   -- Turn pretty printing back on for test summaries; this could still error
   emit.pretty_printing = true
-  local success, err = rock.summarize_test_results(rock.results)
-  if not success then return success, "Error in test summarization" end
-  return "tested"
+  -- Return the value of the test summarization as the overall result of testing:
+  -- If there was a failure or error, in any test, fail the whole thing.
+  -- If a test is supposed to fail, or error, wrap it in a function that checks for the
+  -- correct failure or error message.
+  return rock.summarize_test_results(rock.results)
 end
 
 -- If this was run as a script: lua test.lua,

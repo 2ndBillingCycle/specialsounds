@@ -183,7 +183,10 @@ if _G.arg and type(arg[0]) == "string" and (arg[0]):match("build") then
   -- Tests before modifying files
   -- Bump version before concatenating all the files
   -- Then generate a concatenated file
-  if arg.test    then local test = require "test" assert(test.run())     end
+  if arg.test    then
+    local test = require "test"
+    local status, err_msgassert(test.run())
+  end
   if arg.bumpver then                             assert(rock.bumpver()) end
   if arg.build   then                             assert(rock.run())     end
 end
