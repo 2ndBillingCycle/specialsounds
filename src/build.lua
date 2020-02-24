@@ -198,8 +198,8 @@ if _G.arg and type(arg[0]) == "string" and (arg[0]):match("build") then
       error(err_msg)
     end
   end
-  if arg.bumpver then                             assert(rock.bumpver()) end
-  if arg.build   then                             assert(rock.run())     end
+  if arg.bumpver then assert(rock.bumpver()) end
+  if arg.build   then assert(rock.run())     end
 end
 
 return rock

@@ -469,3 +469,41 @@ Or there just wouldn't be a "built" `SpecialSounds.lua` in the repo. This would 
 For now, we're not including the built `SpecialSounds.lua` in the repo, as the hope is that it eventually produces a build artifact.
 
 One goal I do have is to make include a "minimum requirements" plugin script that _only_ has `/ssound <pattern> "<filename>"`, and does what this project originally set out to do, but in the smallest number of lines of code. Not code golf, but something that can be posted as part of [the FuelRat's IRC Client Setup Guides](https://confluence.fuelrats.com/display/FRKB/IRC+Client+Setup+Guides) for easy copy and pasting.
+
+---
+
+`test.lua` now has `build.lua` exit the program with an exit code of 0 if and only if all test functions passed. This means that this branch will be failing for a while. Essentially, I don't mind lower test coverage, but I don't want failing tests to be the norm on the `master` branch. It's fine on feature or development branches, but not on `master`.
+
+The current plan I have is to finally get to the namesake of the branch this document was started on: refactoring.
+
+First, I want to go through the files I've made, avoiding the now "old" code in what used to be `SpecialSounds.lua` and is now `main.lua`, as it was written a while ago and is now but a distant memory, and is pretty gnarly.
+
+I want to work on polishing up the other code, removing the long comment blocks that preceded each one, integrating them into the code as it hopefully reflects the hopes and dreams originally expressed in those rants, or collating them in a `docs/` file.
+
+I also want to make sure there's no development artifacts, like leftovers from print debugging, or old interafaces.
+
+Then I want to work towards redoing the way the tests are expressed. I could rework it all to use [`busted`](https://github.com/Olivine-Labs/busted), which would supposedly make the tests easier to write and read, but I am kind of attached to my homegrown testing framework, mostly because of the sunken cost fallacy.
+
+Sticking with my own testing framework would, though, through the use of a custom debug function passed to `xpcall()`, could collect the line number of the failed function, allowing for GitHub Actions runs to be able to list out all of the errors that happened, and point the the specific line numbers from whence they came.
+
+The testing framework does need a readability overhaul, though, to try to weed out the ideas that don't need a whole, nested table structure, to express. Composibility shouldn't need a new layer in the data structure for each composed part.
+
+Also, I want to remove the distintion of "WIP tests". WIP tests themselves are fine, but there shouldn't be any WIP tests on `master`. The branch in which the feature is developed is the place where those tests will be Work In Progress, and will only be committed to `master`, once they're passing, and the feature is developed.
+
+Then, with the ancillary files well-tested, I could move on to pulling apart `main.lua`, and separating it out into files that encapsulate cohesive ideas.
+
+It'll be tough to resist adding features, so there might be feature branches that branch off of `refactor`, like how `gui` has, that will let me write down an idea, and save it for merging later.
+
+My goal is to eventually get as close to 100% test coverage as possible. It'll most likely never hit 100%, as long as the testing framework itself is part of the test coverage reports: how do you write a test that checks the codepath that leads to `build.lua` exiting with exit code `1` on a failed test? And then how do you make that a part of the testing framework, with both the non-failing and failing branch being covered in the tests?
+
+On the road to 100% test coverage, it'll be impossible to write clear, simple tests without rewriting and refactoring large portions of `main.lua`, which is the point of this branch, and is the reason behind the amount of time that was spent writing a testing framework.
+
+Anyways, once the project has, as a whole, reached the goal of having each code path tested, and having all of the features encoded as tests, this branch will be merged into `master`, and a new, official and stable release will be done (also testing the release process for the first time).
+
+...then it will be immediately forked to work on [issue #3](https://github.com/2ndBillingCycle/specialsounds/issues/3), and shrink down the parser.
+
+Later branches will integrate the features and ideas that will inevitably come up during this refactoring.
+
+Finally, I do want to put together a video tutorial on setting up HexChat with this plugin, both the "minimum" version and the "full" version.
+
+As for the CI/CD stuff, the development of which this document was originally intended to track: When the build process or testing process needs to change, I'll modify this document, which is probably going to move to `cicd_notes.md`, so that `cicd.md` can be a detailed description of how to manually test and build the software, and how automation plays a part, especially the "business logic" it enforces, like how releases are triggered.

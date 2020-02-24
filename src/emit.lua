@@ -1,15 +1,9 @@
 local rock = {}
--- Import header
 local header = require "header"
+-- This variable controls whether or not the table prtty printing will add
+-- trailing commas after the lest element in a table array:
+-- {1, 2, 3, } vs {1, 2, 3}
 rock.trailing_commas = false
-
-rock.debug = function (str)
-  --if type(str) ~= "string" then
-  --  -- do nothing
-  --else
-  --  print(str)
-  --end
-end
 
 rock.clear = function (seen, tbls)
   -- Sets all the keys in the dict seen that are tables also in the array tbl to nil
@@ -170,7 +164,7 @@ rock.to_string = function (var)
     for i,key in ipairs(keys) do
       local val = var[key]
       if val == nil then error("nil val from keys table") end
-      if #indices > 0 or i > 1 then rock.debug("set expanded") expanded = true end
+      if #indices > 0 or i > 1 then expanded = true end
       if type(key) == "string" then
         cur_str[#cur_str + 1] = key.." = "
       elseif type(key) == "table" and not seen_tables[key] then
