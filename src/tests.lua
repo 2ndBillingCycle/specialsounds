@@ -1,29 +1,31 @@
 local rock = {}
+-- This file contains all of the tests that are run by the testing framework
 
 local emit = require "emit"
 local header = require "header"
 
----[====[ Test functions
+---[====[ Example test functions
 rock.test_simple_pass = function ()
   return true
 end
 
 rock.test_simple_fail = function ()
-  return false
+  local function fails ()
+    return nil, "Error message"
+  end
+
+  return not fails()
 end
 
 rock.test_simple_error = function ()
-  error("This error is intentional")
-end
+  local function throws_error ()
+    error("This error is intentional")
+  end
 
-rock.test_expected_fail = function ()
-  local f_err, result, err = pcall(rock.test_simple_fail)
-  return err ~= "This error is intentional"
-end
-
-rock.test_expected_err = function ()
-  local f_err, result, err = pcall(rock.test_simple_error)
-  return not f_err and result:match("This error is intentional")
+  local return_value = {pcall(throws_error)}
+  return return_value[1] == false and
+         type(return_value[2]) == "string" and
+         return_value[2]:match("This error is intentional")
 end
 
 local function prints_stuff ()
@@ -52,66 +54,98 @@ rock.test_print_capture = function ()
       "Wrote it!",
     })
 end
---]==]
+-- Example test functions ]====]
 
---[==[ Each case table looks like this
+--[==[ Case table structure
 The case table is a list of inputs (and outputs) to be fed to the function that is being tested.
 
-Each element can either be a straight value, in which case the output is expected to be a literal true,
-or can be a table with two keys: input and output.
+The keys are:
+name = the name of the function
+func = the function
 
-Both the input and output keys can be either straight values, or can be tables.
+Each element can be one of two things: A table or anything other than a table (excluding nil).
 
-If the input is a table, it is trated as an array of arguments to pass as inputs to the function,
-and it is unpack()'d. If the output is a table, the function is assumed to return multiple values,
-and each of its return values will be compared, in order, to the array in output.
+If it's not a table, the value is passed to the function, and the output is expected to be truthy.
 
-If the input and/or output need to be tables, input and output must still be arrays, and so can have a
-table as their only element: input={{key="value"}}
+If it's a table, it's expected to have at least these keys:
 
-Example:
-{
-  "string",
-  {input="string", output=false},
+- input: an array of value to pass as the arguments to the function under test
+
+It may also have only one of these keys:
+
+- expected_error: a string that uses Lua patterns to match against the error message as returned by
+                  xpcall(func, debug.traceback)
+- expected_output: an array of outputs expected from the function (can be omitted if none are expected
+
+It may optionally contain the keys:
+
+- expected_prints: an array where each element is a pair of strings, the first indicating
+                   which print function was expected, the second indicating the message expected.
+                   For example:
+
+expected_print = {
+  {"print", "Hi! Testing"},
+  {"info", "Here's some info"},
+  {"err", "Uhoh, an error!"},
+  {"write", "Wrote it!"},
+}
+
+If the input and/or output need to be tables, input and expected_output must still be arrays, and so can have a
+table as their only element: an input specified as input={{key="value"}} will pass the table {key="value"} as
+the first and only argument to the function under test.
+
+Use the first case table as an example.
+
+-- Case table structure ]==]
+
+---[=======[ Case tables
+rock.cases_print_example = {
+  name = "print example",
+  func=prints_stuff,
+  {input={}, expected_output={}},
   {
-    input={1,2,3},
-    output={"a","b","c"},
-  },
-  {
-    input={{key="value"}},
-    output={{key="value"}},
+    expected_output={{
+      "Hi! Testing",
+      "Here's some info",
+      "Uhoh, an error!",
+      "Wrote it!",
+    }},
+    expected_prints={
+      {"print", "Hi! Testing"},
+      {"info", "Here's some info"},
+      {"err", "Uhoh, an error!"},
+      {"write", "Wrote it!"},
+    },
   },
 }
---]==]
 
-rock.cases = {
-  ["lexer.lex"]={
-    func = (require "lexer").lex,
-    cases = {
-      "/SSOUND /add server #channel sound H:\\sound.wav match (matc%(h pattern)",
-      "/SSOUND /add server #channel sound H:\\sound.wav",
-      "/SSOUND /add server #channel match pattern",
-      "/SSOUND /add server match pattern",
-      "/SSOUND /add server sound sound",
-      "/SSOUND /add #channel match word",
-      "/SSOUND /add #channel sound sound.wav",
-      "/SSOUND /add match (pitter patter)",
-      "/SSOUND /add sound rain.wav",
-      "/SSOUND /add (match) match match sound sound",
-      "/SSOUND /show server #channel",
-      "/SSOUND /show server",
-      "/SSOUND /show #channel",
-      "/SSOUND /show (match)",
-      "/SSOUND /show ",
-      "/SSOUND /delete server #channel 2",
-      "/SSOUND /delete server #channel 1",
-      "/SSOUND /delete server 1",
-      "/SSOUND /delete #channel 1",
-      "/SSOUND /delete (match) 1",
-      "/SSOUND /delete 1",
-      {
-        input="(error",
-        expected_output={nil, [[
+rock.cases_lexer_lex = {
+  name = "lexer.lex",
+  func = (require "lexer").lex,
+  "/SSOUND /add server #channel sound H:\\sound.wav match (matc%(h pattern)",
+  "/SSOUND /add server #channel sound H:\\sound.wav",
+  "/SSOUND /add server #channel match pattern",
+  "/SSOUND /add server match pattern",
+  "/SSOUND /add server sound sound",
+  "/SSOUND /add #channel match word",
+  "/SSOUND /add #channel sound sound.wav",
+  "/SSOUND /add match (pitter patter)",
+  "/SSOUND /add sound rain.wav",
+  "/SSOUND /add (match) match match sound sound",
+  "/SSOUND /show server #channel",
+  "/SSOUND /show server",
+  "/SSOUND /show #channel",
+  "/SSOUND /show (match)",
+  "/SSOUND /show ",
+  "/SSOUND /delete server #channel 2",
+  "/SSOUND /delete server #channel 1",
+  "/SSOUND /delete server 1",
+  "/SSOUND /delete #channel 1",
+  "/SSOUND /delete (match) 1",
+  "/SSOUND /delete 1",
+  {
+    input={"(error"},
+    expected_error={nil, [[
 Unbalanced parenthesis: missing )
 
 This is the group:
@@ -119,45 +153,47 @@ This is the group:
 
 The full command is:
 /nil (error]]},
-      },
+  },
+  {
+    input={"noerror)"},
+    expected_output={
       {
-        input="error)",
-        expected_output={
-          {{name="text", value="error)"}}
-        },
+        {name="text", value="noerror)"},
       },
     },
   },
-  ["emit.to_string"]={
-    func=emit.to_string,
-    cases = {
-      {
-        input={{1, 2, 3}},
-        expected_output="{1, 2, 3}",
-      },
-      {
-        input={{-91,nil,nil,400,.0,nil}},
-        expected_output="{-91, nil, nil, 400, 0}",
-      },
-      {
-        input={{key="value"}},
-        expected_output="{key = [[value]]}",
-      },
-      {
-        input={{[1]="value"}},
-        expected_output="{[[value]]}",
-      },
-      {
-        input={{[1.1]="2"}},
-        expected_output="{[1.1] = [[2]]}",
-      },
-      {
-        input={{1,[1.1]="2",3}},
-        expected_output="{\n  1,\n  3,\n  [1.1] = [[2]]\n}",
-      },
-      {
-        input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}},
-        expected_output=
+}
+
+rock.cases_emit_to_string = {
+  name = "emit.to_string",
+  func = emit.to_string,
+  {
+    input={{1, 2, 3}},
+    expected_output="{1, 2, 3}",
+  },
+  {
+    input={{-91,nil,nil,400,.0,nil}},
+    expected_output="{-91, nil, nil, 400, 0}",
+  },
+  {
+    input={{key="value"}},
+    expected_output="{key = [[value]]}",
+  },
+  {
+    input={{[1]="value"}},
+    expected_output="{[[value]]}",
+  },
+  {
+    input={{[1.1]="2"}},
+    expected_output="{[1.1] = [[2]]}",
+  },
+  {
+    input={{1,[1.1]="2",3}},
+    expected_output="{\n  1,\n  3,\n  [1.1] = [[2]]\n}",
+  },
+  {
+    input={{1,2,3,[1.1]="a",[{1,key="value"}]={1,key="value"}}},
+    expected_output=
 [=[{
   1,
   2,
@@ -171,37 +207,20 @@ The full command is:
     key = [[value]]
   }
 }]=],
-      },
-      {
-        input={{[{1,2}]={1,2}}},
-        expected_output="{[{1, 2}] = {1, 2}}",
-      },
-      {
-        input={{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}},
-        expected_output="{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}",
-      },
-    },
   },
-}
-
-rock.wip_tests = {
-  "test_simple_pass",
-  "test_simple_fail",
-  "test_simple_error",
-  "test_expected_fail",
-  "test_expected_err",
-  "test_print_capture",
-}
-
-rock.wip_cases = {
-  ["emit.to_string"]={
-    func=(require "emit").to_string,
-    cases = {
-      {
+  {
+    input={{[{1,2}]={1,2}}},
+    expected_output="{[{1, 2}] = {1, 2}}",
+  },
+  {
+    input={{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}},
+    expected_output="{1, {2, {3, nil, nil, 4}, nil, 5}, nil, 6}",
+  },
+  {
         input={{[{}] = -0.01, [1.1] = "\n", {key = "value"}}},
         expected_output=
 -- NOTE: The spaces indenting a nonexistent value in the key
--- that's an empty table are undesired
+-- which is an empty table are undesired
 [=[{
   {
     key = [[value]]
@@ -210,59 +229,9 @@ rock.wip_cases = {
   [1.1] = [[
 ]]
 }]=],
-      },
-    },
-  },
-  print_example={
-    func=prints_stuff,
-    cases={
-      {
-        expected_output={{
-          "Hi! Testing",
-          "Here's some info",
-          "Uhoh, an error!",
-          "Wrote it!",
-        }},
-        expected_prints={
-          {"print", "Hi! Testing"},
-          {"info", "Here's some info"},
-          {"err", "Uhoh, an error!"},
-          {"write", "Wrote it!"},
-        },
-      },
-    },
-  },
-  no_print={
-    func=function () emit.print("Oops, not supposed to print!") end,
-    cases={
-      {
-        expected_output={nil},
-      },
-    },
   },
 }
 
--- If we're doing these tests for a build, remove the tests we're still
--- working on
--- NOTE: Could this be run twice if it's imported twice?
-if skip_wip_tests then
-  for i,v in ipairs(rock.wip_tests) do
-    rock[v] = nil
-  end
-else
-  -- If this is a run during feature building, add the tests we're working on
-  for name,case_tbl in pairs(rock.wip_cases) do
-    if rock.cases[name] == nil then
-      rock.cases[name] = {
-        func=case_tbl.func,
-        cases={},
-      }
-    end
-    if case_tbl.cases == nil then error(("%s missing cases"):format(tostring(name))) end
-    for i,case in ipairs(case_tbl.cases) do
-      table.insert(rock.cases[name].cases, case)
-    end
-  end
-end
+-- Case tables ]=======]
 
 return rock

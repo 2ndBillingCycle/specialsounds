@@ -1,50 +1,6 @@
---[[
-I would like this to be a nicer test runner.
-
-I think that'll require coroutines, as I'd like a running output, where each test section is printed, followed by a string of . for success and ❌ or X:
-
-```text
-test_lexer
-.........X..X......X
-test_parser
-...X.......X...
-
-results:
-
-test_lexer: 2
-
-input:
-"(error"
-
-error:
-Mismatched parenthesis error
-
-
-input:
-{key = "value"}
-
-output:
-{}
-
-expected error:
-str needs to be string
-...
-```
-
-I would like the following features:
-
-- Specify the function to be tested
-- Provide input
-- - Optionally specify the output to match to determine if the function worked
-- - Maybe specify the messages that should be printed
-- Maybe write out test inputs and outputs of failed tests as they go
-- Summarize the test results for each function, as well as the total pass %
-- Support pre-tasks/setup for when main.lua gets tested
-
-NOTE: Test runner does not yet isolate tests; subsequent cases will see the state from previous runs
---]]
-
 local rock = {}
+-- This file contains the testing framework
+-- NOTE: Test runner does not yet isolate tests; subsequent cases will see the state from previous runs
 
 local header = require "header"
 local emit = require "emit"
