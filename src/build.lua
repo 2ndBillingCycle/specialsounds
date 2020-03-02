@@ -1,3 +1,21 @@
+--[=[ NOTE: A lot of what this does can be performed by a myriad of tools:
+
+lua-amalg: https://github.com/siffiejoe/lua-amalg
+Also claims to be able to embed C modules, which will help keep this as one download, if LPEG is used.
+
+Others:
+luacc: https://github.com/mihacooper/luacc
+squish: https://github.com/LuaDist/squish
+from a quick google, also relevant:
+- http://lua-users.org/lists/lua-l/2014-10/msg00003.html
+- https://stackoverflow.com/questions/43705768/how-to-setup-and-use-lua-squish
+bundle.lua: https://github.com/akavel/scissors/blob/master/tools/bundle/bundle.lua
+soar: https://github.com/stevedonovan/ldeb/blob/master/soar.lua
+loop: http://loop.luaforge.net/release/preload.html
+
+And many others. With embedding Lua being so popular, many, many people have attempted the exact solution this file uses, as well
+as many, many other solutions.
+--]=]
 --[==[
 I'm thinking that, to enable easy distribution of a multi-file Lua script, I could have the main file that's loaded combine all the other files.
 

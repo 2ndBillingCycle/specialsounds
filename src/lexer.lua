@@ -1,3 +1,5 @@
+-- NOTE: This and the parser should be rewritten using LPEG
+
 -- Neither this lexer nor parser are pretty. A very pretty one is at:
 -- https://github.com/stravant/LuaMinify/blob/master/ParseLua.lua
 local rock = {}

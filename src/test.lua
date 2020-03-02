@@ -2,6 +2,30 @@ local rock = {}
 -- This file contains the testing framework
 -- NOTE: Test runner does not yet isolate tests; subsequent cases will see the state from previous runs
 
+--[=[ Recipe for sandboxing code
+from: https://www.slideshare.net/jgrahamc/lua-the-worlds-most-infuriating-language
+
+local env = { print = print }
+local envmeta = { __index={}, __newindex=function() end }
+setmetatable(env,envmeta)
+
+function run(code)
+  local f = loadstring(code)
+  setfenv(f, env)
+  pcall(f)
+end
+
+run([[
+  local x = "Hello, world!"
+  print(x)
+  local y = string.len(x)    -- Will throw error, as only print is defined in the "global" table
+]])
+
+Also, note from: http://www.lua.org/manual/5.1/manual.html#pdf-_G
+
+"Lua itself does not use [_G]; changing its value does not affect any environment, nor vice-versa. (Use setfenv to change environments.)"
+-- Recipe for sandboxing code ]=]
+
 local header = require "header"
 local emit = require "emit"
 local tests = require "tests"
