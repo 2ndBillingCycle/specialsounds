@@ -93,9 +93,6 @@ expected_print = {
 If the input and/or output need to be tables, input and expected_output must still be arrays, and so can have a
 table as their only element: an input specified as input={{key="value"}} will pass the table {key="value"} as
 the first and only argument to the function under test.
-
-Use the first case table as an example.
-
 -- Case table structure ]==]
 
 ---[=======[ Case tables

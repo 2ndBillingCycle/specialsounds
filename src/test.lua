@@ -28,71 +28,56 @@ rock.compare_output = function (expected_output, output)
   end
 end
 
----[[ Each element of the results array should look like this:
-   --   {
-   --     name="function name",
-   --     func=function,
-   --     input="input argument(s)",
-   --     expected_output="expected output",
-   --     output={func(input)},
-   --     expected_prints={"expected strings"}
-   --     print_output={"printed string"},
-   --     comparison=rock.compare_output(output, expected_output)
-   --                and header.compare_tables(expected_prints, print_output)
-   --     err="error string returned by test runner itself; may be nil if no error",
-   --   }
+--[[ Results dictionary structureEach element of the results array should look like this:
+{
+  name="function name",
+  input={"table of", "input argument(s)"},
+  expected_output={"table of", "expected output"},
+  expected_prints={{"print", "expected strings"}},
+  print_output={{"print", "printed strings"},
+  expected_error="error string expected to be returned by the function",
+  xpcall_return={false, "Values returned by xpcall"}
+}
+-- Results dictionary structure ]]
 rock.results = {}
+
+rock.add_result = function(func, result_table)
+  if type(func) ~= "function" or type(result_table) ~= "table" then
+    error("func must be a function, result_table a table")
+  end
+  if type(rock.results[func]) == "table" then
+    table.insert(rock.results[func], result_table)
+  else
+    rock.results[func] = {result_table}
+  end
+  return true
+end
 
 rock.perform_test = function (name, func, test_case)
   if type(name) ~= "string" then error("name is not string") end
   if type(func) ~= "function" then error("func is not a function") end
   if type(test_case) ~= "table" then error("test_case must be a table") end
 
-  if test_case.expected_output == nil then error("expected output is nil") end
+  if test_case.expected_output == nil and test_case.expected_error == nil then
+    error("One of expected_output or expected_error is needed")
+  end
   if test_case.expected_prints == nil then test_case.expected_prints = {} end
   local results = {
     name=name,
-    func=func,
     input=test_case.input,
     expected_output=test_case.expected_output,
+    expected_error=test_case.expected_error,
     expected_prints=test_case.expected_prints,
   }
   local get_prints = emit.record_prints()
-  if type(test_case.input) == "table" then
-    results.output = {xpcall(
-                              function ()
-                                return func(unpack(test_case.input))
-                              end,
-                              debug.traceback
-                            )}
-  else
-    results.output = {xpcall(
-                              function ()
-                                return func(test_case.input)
-                              end,
-                              debug.traceback
-                            )}
-  end
+  results.xpcall_return = {xpcall(
+                            function ()
+                              return func(unpack(test_case.input))
+                            end,
+                            debug.traceback
+                          )}
   results.print_output = get_prints()
-  results.err = not table.remove(results.output, 1)
-  if results.err then
-    results.err = table.remove(results.output, 1)
-  else
-    -- We do the comparison here as we want to be able to print out a running line of ...x...XO..
-    -- NOTE: It'd be ideal to not have errors from compare_output() be mixed in with errors from
-    -- running the test, but I guess those errors would show up in the xpcall()
-    results.comparison = rock.compare_output(test_case.expected_output, results.output)
-                                and header.compare_tables(test_case.expected_prints, results.print_output)
-  end
-  if results.comparison then
-    emit.write(".") 
-  elseif results.err then
-    emit.write("X")
-  else
-    emit.write("x")
-  end
-  table.insert(rock.results, results)
-  return "."
+  return results
 end
 
 rock.perform_simple_test = function (name, func, input)
@@ -100,73 +85,78 @@ rock.perform_simple_test = function (name, func, input)
   if type(func) ~= "function" then error("func is not a function") end
   local results = {
     name=name,
-    func=func,
     input=input,
+    expected_output=true,
+    expected_prints={},
   }
   local get_prints = emit.record_prints() -- Suppresses printing during test runs
-  results.output = {xpcall(
-                            function ()
-                              return func(input)
-                            end,
-                            debug.traceback
+  results.xpcall_return = {xpcall(
+                             function ()
+                               return func(input)
+                             end,
+                             debug.traceback
                           )}
   get_prints() -- We don't need the output
-  results.err = not table.remove(results.output, 1)
-  if results.err then
-    results.err = table.remove(results.output, 1)
-  else
-    results.comparison = results.output[1] and true or false
-  end
-  if results.comparison then
-    emit.write(".") 
-  elseif results.err then
-    emit.write("X")
-  else
-    emit.write("x")
-  end
-  table.insert(rock.results, results)
-  return "."
+  return results
 end
 
-rock.input_output_tests = function ()
+rock.run_case_tests = function ()
   -- For each case suite, run through the test cases, and perform the test
-  if tests.cases == nil then error("tests.lua missing case table") end
-  for name,case in pairs(tests.cases) do
-    if type(name) ~= "string" then error("tests.cases should be a map of function names to case sets") end
-    if type(case.func) ~= "function" then error("func must be a Lua function") end
-    case.name = name
-    emit.print("Function: %s", case.name)
-    for i,test_case in ipairs(case.cases) do
-      if type(test_case) == "table" then
-        rock.perform_test(
-          case.name,
-          case.func,
-          test_case
-        )
-      else
-        rock.perform_simple_test(
-          case.name,
-          case.func,
-          test_case
-        )
+  local tests = require "tests"
+  for name, case_table in pairs(tests) do
+    if type(case_table) == "table" and name:match("^case_.+") then
+      emit.print("Function: %s", case_table.name)
+      for i,test_case in ipairs(case_table) do
+        if type(test_case) == "table" then
+          local results = rock.perform_test(
+            case_table.name,
+            case_table.func,
+            test_case
+          )
+        else
+          local results = rock.perform_simple_test(
+            case_table.name,
+            case_table.func,
+            test_case
+          )
+        end
+        if type(results) ~= "table" then error("Results not table") end
+        rock.add_result(func, results)
       end
+      emit.write("\n")
     end
-    emit.write("\n")
-  end
   emit.write("\n")
-  return "."
+  return true
 end
 
 rock.summarize_test_results = function (test_results)
+  -- This function goes through the results table, pulling out the runs for each function,
+  -- doing the following:
+  -- 
+  -- - Prints nothing if the function passed the test
+  -- - If it failed,
+  --   - Prints out the name of the function that ran the test, or
+  --   - Prints out the input for each run, if there was any
+  --   - Prints the output and expected output, or
+  --   - Prints out the error message and expected error message, or
+  --
+  -- At the end, it prints out the number of failures and errors overall
+  -- Printing out the count for each case is unnecessary: That's what the test coverage
+  -- reports are for, and anyways, stuff shouldn't be failing.
   -- flag to indicate if any failures or errors happened during testing
   local all_passed = true
   emit.print("\nTest results:\n")
   local pass = {}
   local fail = {}
   local errs = {}
-  for i,result in ipairs(rock.results) do
+  for func,results in pairs(rock.results) do
+    for i, result in ipairs(results) do
     local name = result.name
-    local input = result.input ~= nil and assert(emit.format("input:\n%s", result.input)) or false
+    if result.input == nil then
+      local input_str = false
+    else
+      local input_str = assert(emit.format("input:\n%s", result.input))
+    end
     -- If the name hasn't been seen yet, set its pass, fail, and err
     -- counts to 0
     if not pass[name] then
@@ -174,6 +164,7 @@ rock.summarize_test_results = function (test_results)
       fail[name] = {count=0}
       errs[name] = {count=0}
     end
+    -- Using result.xpcall_return, determine if the function did what it was supposed to do, failed, or errored
     if result.err then
       table.insert(errs[name], assert(emit.format(
         "Error in test:\n"..(input and input.."\n" or "").."error:\n%s\n",
@@ -232,52 +223,32 @@ error: %s
   return all_passed
 end
 
+rock.run_test_functions = function ()
+  local tests = require "tests"
+  for name,func in pairs(tests) do
+    if type(func) == "function" and name:match("^test_.+") then
+      local func_name = name:match "^test_(.+)"
+      emit.print(func_name)
+      rock.add_result(
+        func,
+        rock.perform_simple_test(name, func, nil)
+      )
+    end
+  end
+  return true
+end
+
 rock.run = function ()
   -- Turn off pretty_printing of tables during tests, as that function is used
   -- to print error messages, as an error thrown during printing error messages
   -- would make finding the error in emit.to_string more difficult
   emit.pretty_printing = false
   -- Find functions in this module that start with test_ and run them
-  emit.print("unit tests:")
-  for name,func in pairs(tests) do
-    if name:match("^test_.+") and type(func) == "function" then
-      local results = {
-        name=name,
-        func=func,
-     -- input="input argument(s)",
-     -- expected_output="expected output",
-     -- output={func(input)},
-     -- expected_prints={"expected strings"}
-     -- print_output={"printed string"},
-     -- comparison=rock.compare_output(output, expected_output)
-     --            and header.compare_tables(expected_prints, print_output)
-     -- err="error string returned by test runner itself; may be nil if no error",
-      }
-      local get_prints = emit.record_prints()
-      results.output = {xpcall(
-                                function ()
-                                  return func(results)
-                                end,
-                                debug.traceback
-                       )}
-      results.print_output = get_prints()
-      results.err = not table.remove(results.output, 1)
-      if results.err then
-        results.err = table.remove(results.output, 1)
-        emit.write("X")
-      end
-      results.comparison = results.output[1] and true or false
-      if results.comparison then
-        emit.write(".")
-      else
-        emit.write("x")
-      end
-      rock.results[ #rock.results + 1] = results
-    end
-  end
+  emit.print("Running unit tests")
+  assert(rock.run_test_functions())
   emit.write("\n")
-  emit.print("input/output tests:")
-  rock.input_output_tests()
+  emit.print("input/output tests")
+  assert(rock.run_case_tests())
   -- Turn pretty printing back on for test summaries; this could still error
   emit.pretty_printing = true
   -- Return the value of the test summarization as the overall result of testing:
