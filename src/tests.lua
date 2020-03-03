@@ -56,6 +56,80 @@ rock.test_print_capture = function ()
 end
 -- Example test functions ]====]
 
+---[====[ Test functions
+-- NOTE: These should be turned into case tables
+local function example_function () end
+local example_xpcall_return = {xpcall(example_function, debug.traceback)}
+
+rock.test_summarize_results_failures = function ()
+  local test_results = {
+    [example_function] = {
+      {
+        name="example function",
+        expected_output={true},
+        xpcall_return=example_xpcall_return,
+      },
+      {
+        name="example function",
+        expected_output={nil},
+        xpcall_return=example_xpcall_return,
+      },
+    },
+  }
+
+  local expected_summary = 
+[[
+]]
+
+  local summary = (require "test").summarize_results(test_results)
+  return expected_summary == summary
+end
+
+local function example_function ()
+  error("Error message")
+end
+xpcall_return = {xpcall(example_function, debug.traceback)}
+
+rock.test_summarize_results_errors = function ()
+  local test_results = {
+    [example_function] = {
+      {
+        name="example function",
+        expected_output={nil},
+        xpcall_return=example_xpcall_return,
+      },
+      {
+        name="example function",
+        expected_error="",
+        xpcall_return=example_xpcall_return,
+      },
+      {
+        name="example function",
+        expected_error="Error message",
+        xpcall_return=example_xpcall_return,
+      },
+    },
+  }
+
+  local expected_summary =
+[[
+]]
+
+  local summary = (require "test").summarize_results(test_results)
+  return expected_summary == summary
+end
+
+xpcall_return = {xpcall(prints_stuff, debug.traceback)}
+
+rock.test_summarize_results_prints = function ()
+  local test_results = {
+    [example_function] = {
+      {
+        name="prints stuff",
+
+end
+-- Test functions [====]
+
 --[==[ Case table structure
 The case table is a list of inputs (and outputs) to be fed to the function that is being tested.
 
@@ -99,8 +173,8 @@ the first and only argument to the function under test.
 rock.cases_print_example = {
   name = "print example",
   func=prints_stuff,
-  {input={}, expected_output={}},
   {
+    input={},
     expected_output={{
       "Hi! Testing",
       "Here's some info",

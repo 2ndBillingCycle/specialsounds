@@ -168,6 +168,31 @@ rock.summarize_test_results = function (test_results)
   -- Printing out the count for each case is unnecessary: That's what the test coverage
   -- reports are for, and anyways, stuff shouldn't be failing.
   -- flag to indicate if any failures or errors happened during testing
+
+  local summaries = {}
+  -- Process the results for each function
+  for func,results in pairs(test_results) do
+    summaries[func] = summarize_results(func, results)
+  end
+
+  local summary_reports = {}
+  for func,summary in pairs(summaries) do
+    table.insert(summary_reports, summary_report(func, summary))
+  end
+
+  local all_summaries = ""
+  for _,summary in ipairs(summary_reports) do
+    all_summaries = all_summaries.."\n\n"..summary
+  end
+
+  if any_errors_or_failures(summaries) then
+    return false, all_summaries
+  else
+    return true, all_summaries
+  end
+end
+--[===[
+rock.summarize_test_results = function (test_results)
   local all_passed = true
   emit.print("\nTest results:\n")
   local pass = {}
@@ -245,6 +270,22 @@ error: %s
   -- If a test is supposed to fail, or error, wrap it in a function that checks for the
   -- correct failure or error message.
   return all_passed
+end
+  --]===]
+
+rock.run_test_functions = function ()
+  local tests = require "tests"
+  for name,func in pairs(tests) do
+    if type(func) == "function" and name:match("^test_.+") then
+      local func_name = name:match "^test_(.+)"
+      emit.print(func_name)
+      rock.add_result(
+        func,
+        rock.perform_simple_test(name, func, nil)
+      )
+    end
+  end
+  return true
 end
 
 rock.run_test_functions = function ()
