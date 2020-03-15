@@ -52,7 +52,9 @@ rock.compare_output = function (expected_output, output)
   end
 end
 
---[[ Results dictionary structureEach element of the results array should look like this:
+--[[ Results dictionary structure
+Each element of the results array should look like this:
+
 {
   name="function name",
   input={"table of", "input argument(s)"},
@@ -66,8 +68,11 @@ end
 rock.results = {}
 
 rock.add_result = function(func, result_table)
-  if type(func) ~= "function" or type(result_table) ~= "table" then
-    error("func must be a function, result_table a table")
+  if type(func) ~= "function" then
+    error("func must be a function")
+  end
+  if type(result_table) ~= "table" then
+    error("result_table must be a table")
   end
   if type(rock.results[func]) == "table" then
     table.insert(rock.results[func], result_table)
@@ -124,6 +129,10 @@ rock.perform_simple_test = function (name, func, input)
   return results
 end
 
+-- NOTE: This and run_test_functions() can be modified to just run all the
+-- tables and functions in the module, respectively, as only test functions and
+-- case tables will be added to the returned table.
+-- All the rest can remain as local declarations, inside the scope of the module.
 rock.run_case_tests = function ()
   -- For each case suite, run through the test cases, and perform the test
   local tests = require "tests"
@@ -153,139 +162,30 @@ rock.run_case_tests = function ()
   return true
 end
 
-rock.summarize_test_results = function (test_results)
-  -- This function goes through the results table, pulling out the runs for each function,
-  -- doing the following:
-  -- 
-  -- - Prints nothing if the function passed the test
-  -- - If it failed,
-  --   - Prints out the name of the function that ran the test, or
-  --   - Prints out the input for each run, if there was any
-  --   - Prints the output and expected output, or
-  --   - Prints out the error message and expected error message, or
-  --
-  -- At the end, it prints out the number of failures and errors overall
-  -- Printing out the count for each case is unnecessary: That's what the test coverage
-  -- reports are for, and anyways, stuff shouldn't be failing.
-  -- flag to indicate if any failures or errors happened during testing
+rock.summarize_failure = function (result)
+  
 
-  local summaries = {}
+rock.summarize_test_results = function (test_results)
+  local failures = {}
+  local errors = {}
   -- Process the results for each function
   for func,results in pairs(test_results) do
-    summaries[func] = summarize_results(func, results)
+    failures[func] = rock.summarize_failures(func, results)
+    errors[func] = rock.summarize_errors(func, results)
   end
 
-  local summary_reports = {}
-  for func,summary in pairs(summaries) do
-    table.insert(summary_reports, summary_report(func, summary))
-  end
+  local summaries = {}
+  for func,_ in pairs(test_results) do
 
-  local all_summaries = ""
-  for _,summary in ipairs(summary_reports) do
-    all_summaries = all_summaries.."\n\n"..summary
-  end
+    summaries[#summaries + 1] = summary
+
+  local all_summaries = table.concat(summaries)
 
   if any_errors_or_failures(summaries) then
     return false, all_summaries
   else
     return true, all_summaries
   end
-end
---[===[
-rock.summarize_test_results = function (test_results)
-  local all_passed = true
-  emit.print("\nTest results:\n")
-  local pass = {}
-  local fail = {}
-  local errs = {}
-  for func,results in pairs(rock.results) do
-    for i, result in ipairs(results) do
-    local name = result.name
-    if result.input == nil then
-      local input_str = false
-    else
-      local input_str = assert(emit.format("input:\n%s", result.input))
-    end
-    -- If the name hasn't been seen yet, set its pass, fail, and err
-    -- counts to 0
-    if not pass[name] then
-      pass[name] = {count=0}
-      fail[name] = {count=0}
-      errs[name] = {count=0}
-    end
-    -- Using result.xpcall_return, determine if the function did what it was supposed to do, failed, or errored
-    if result.err then
-      table.insert(errs[name], assert(emit.format(
-        "Error in test:\n"..(input and input.."\n" or "").."error:\n%s\n",
-        result.err
-      )))
-      errs[name].count = errs[name].count + 1
-    elseif result.comparison ~= nil and not result.comparison then
-      local fail_str = "Test failure:\n"
-      if input then fail_str = fail_str..input.."\n" end
-      if result.expected_output ~= nil then
-        fail_str = fail_str..assert(emit.format("expected:\n%s", result.expected_output)).."\n"
-      end
-      fail_str = fail_str..assert(emit.format("output:\n%s", result.output)).."\n"
-      if type(result.expected_prints) == "table" then
-        fail_str = fail_str..assert(emit.format("expected prints:\n%s", result.expected_prints)).."\n"
-      end   
-      if type(result.print_output) == "table" then
-        fail_str = fail_str..assert(emit.format("prints:\n%s", result.print_output)).."\n"
-      end
-      fail[name][#fail[name] + 1] = fail_str
-      fail[name].count = fail[name].count + 1
-    else
-      pass[name].count = pass[name].count + 1
-    end
-  end
-  for name,tbl in pairs(pass) do
-    if #fail[name] > 0 or #errs[name] > 0 then
-      all_passed = false
-      emit.print("Results for %s\n", name)
-    end
-    for i,message in ipairs(fail[name]) do
-      emit.print(message)
-    end
-    for i,message in ipairs(errs[name]) do
-      emit.print(message)
-    end
-  end
-  emit.print("\nSummary:")
-  for name,_ in pairs(pass) do
-    emit.print(
-      [[
-Function: %s
-pass: %s
-fail: %s
-error: %s
-]],
-      name,
-      pass[name].count,
-      fail[name].count,
-      errs[name].count
-    )
-  end
-  -- If there was a failure or error, in any test, fail the whole thing.
-  -- If a test is supposed to fail, or error, wrap it in a function that checks for the
-  -- correct failure or error message.
-  return all_passed
-end
-  --]===]
-
-rock.run_test_functions = function ()
-  local tests = require "tests"
-  for name,func in pairs(tests) do
-    if type(func) == "function" and name:match("^test_.+") then
-      local func_name = name:match "^test_(.+)"
-      emit.print(func_name)
-      rock.add_result(
-        func,
-        rock.perform_simple_test(name, func, nil)
-      )
-    end
-  end
-  return true
 end
 
 rock.run_test_functions = function ()

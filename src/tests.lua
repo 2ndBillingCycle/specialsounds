@@ -58,10 +58,11 @@ end
 
 ---[====[ Test functions
 -- NOTE: These should be turned into case tables
-local function example_function () end
-local example_xpcall_return = {xpcall(example_function, debug.traceback)}
 
-rock.test_summarize_results_failures = function ()
+rock.test_summarize_test_results_failures = function ()
+  local function example_function () end
+  local example_xpcall_return = {xpcall(example_function, debug.traceback)}
+
   local test_results = {
     [example_function] = {
       {
@@ -79,18 +80,26 @@ rock.test_summarize_results_failures = function ()
 
   local expected_summary = 
 [[
+example function results:
+failures: 1
+
+expected output:
+true
+
+actual output:
+nil
 ]]
 
-  local summary = (require "test").summarize_results(test_results)
+  local summary = (require "test").summarize_test_results(test_results)
   return expected_summary == summary
 end
 
-local function example_function ()
-  error("Error message")
-end
-xpcall_return = {xpcall(example_function, debug.traceback)}
+rock.test_summarize_test_results_errors = function ()
+  local function example_function ()
+    error("Error message")
+  end
+  local xpcall_return = {xpcall(example_function, debug.traceback)}
 
-rock.test_summarize_results_errors = function ()
   local test_results = {
     [example_function] = {
       {
@@ -113,19 +122,142 @@ rock.test_summarize_results_errors = function ()
 
   local expected_summary =
 [[
+example function results:
+failures: 1
+
+expected error:
+
+
+actual error:
+Error message
+
+errors: 1
+
+expected output:
+nil
+
+Got error instead:
+Error message
 ]]
 
   local summary = (require "test").summarize_results(test_results)
   return expected_summary == summary
 end
 
-xpcall_return = {xpcall(prints_stuff, debug.traceback)}
 
 rock.test_summarize_results_prints = function ()
+  -- Printed and returned what was expected
   local test_results = {
-    [example_function] = {
+    [prints_stuff] = {
       {
         name="prints stuff",
+        expected_output=rock.cases_print_example[1].expected_output,
+        expected_prints=rock.cases_print_example[1].expected_prints,
+        xpcall_return={xpcall(prints_stuff, debug.traceback)},
+      },
+    },
+  }
+
+  -- Failed to print anything and succeeded
+  local function doesnt_print () return true end
+
+  test_results = {
+    [doesnt_print] = {
+      {
+        name="Doesn't print",
+        expected_output={true},
+        expected_prints={{"print", "anything"}},
+        xpcall_return={xpcall(doesnt_print, debug.traceback)},
+      },
+    },
+  }
+
+  -- Failed to print anything and failed
+  local function silent_failure () return false end
+
+  test_results = {
+    [silent_failure] = {
+      {
+        name="Silent failure",
+        expected_output={true},
+        expected_prints={{"print", "anything"}},
+        xpcall_return={xpcall(silent_failure, debug.traceback)},
+      },
+    },
+  }
+
+  -- Printed the right type but the wrong message and succeeded
+  local function say_what_i_want ()
+    emit.print("The wrong thing")
+    return true
+  end
+
+  test_results = {
+    [say_what_i_want] = {
+      {
+        name="I say what I want!",
+        expected_output={true},
+        expected_prints={{"print", "The correct thing"}},
+        xpcall_return={xpcall(silent_failure, debug.traceback)},
+      },
+    },
+  }
+
+  -- Printed the right type and message, but failed
+  local function said_but_didnt_do ()
+    emit.print("The correct thing")
+    return false
+  end
+
+  test_results = {
+    [said_but_didnt_do] = {
+      {
+        name="Said but didn't do",
+        expected_output={true},
+        expected_prints={{"print", "The right thing"}},
+        xpcall_return={xpcall(said_but_didnt_do, debug.traceback)},
+      },
+    },
+  }
+
+  -- Printed the right type but the wrong message and failed
+
+
+  -- Printed the wrong type but the right message and succeeded
+  -- Printed the wrong type but the right message and failed
+  local function wrong_type_fail ()
+    emit.info("Hi")
+    return false
+  end
+
+  test_results = {
+    [wrong_type_fail] = {
+      {
+        name="Wrong type, correct message, failed",
+        expected_output={true},
+        expected_prints={{"print", "Hi"}},
+        xpcall_return={xpcall(wrong_type_fail, debug.traceback)},
+      },
+    },
+  }
+
+  -- Printed wrong thing and failed
+  local function everything_wrong ()
+    emit.print("The wrong thing")
+    return false
+  end
+
+  -- Not expected to print anything (unexpected print) and succeeded
+  local function chatty_success ()
+    emit.print("Hi!")
+    return true
+  end
+
+  -- Not expected to print anything (unexpected print) and failed
+  local function chatty_failure ()
+    emit.print("Hi!")
+    return false
+  end
 
 end
 -- Test functions [====]
@@ -157,7 +289,7 @@ It may optionally contain the keys:
                    which print function was expected, the second indicating the message expected.
                    For example:
 
-expected_print = {
+expected_prints = {
   {"print", "Hi! Testing"},
   {"info", "Here's some info"},
   {"err", "Uhoh, an error!"},
