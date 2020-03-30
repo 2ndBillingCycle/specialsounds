@@ -5,27 +5,37 @@ local emit = require "emit"
 local header = require "header"
 
 ---[====[ Example test functions
-rock.test_simple_pass = function ()
-  return true
+-- Simple test for success
+rock.passing_test = function ()
+  local function success ()
+    return true
+  end
+
+  return success() == true
 end
 
-rock.test_simple_fail = function ()
+-- Simple test for failure (checks for correct failure reason)
+rock.failure_test = function ()
   local function fails ()
     return nil, "Error message"
   end
 
-  return not fails()
+  local return_values = {fails()}
+
+  return return_values[1] == false and
+         return_values[2]:match("Error message")
 end
 
-rock.test_simple_error = function ()
+-- Simple test for error (tests for the correct error message)
+rock.error_test = function ()
   local function throws_error ()
     error("This error is intentional")
   end
 
-  local return_value = {pcall(throws_error)}
-  return return_value[1] == false and
-         type(return_value[2]) == "string" and
-         return_value[2]:match("This error is intentional")
+  local return_values = {pcall(throws_error)}
+  return return_values[1] == false and
+         type(return_values[2]) == "string" and
+         return_values[2]:match("This error is intentional")
 end
 
 local function prints_stuff ()
@@ -56,8 +66,80 @@ rock.test_print_capture = function ()
 end
 -- Example test functions ]====]
 
----[====[ Test functions
--- NOTE: These should be turned into case tables
+---[====[ Testing framework test suite
+-- NOTE: Any unexpected failures here should be errors
+-- Don't want the tests to continue when the testing framework is failing
+local test = require "test"
+local tft = {} -- Testing Framework Tests
+
+tft.test_perform_simple_test = function ()
+  -- Utility functions
+  local function check_error (func, error_message)
+
+    string.escape_pattern = function(str)
+      str = (str:gsub(quotepattern, "%%%1")
+                :gsub("^^", "%%^")
+                :gsub("$$", "%%%$"))
+      return str
+    end
+
+    local return_values = {xpcall(func, debug.traceback)}
+    return not return_values[1] and
+           return_values[2]:match( error_message:escape_pattern() ),
+           error_message -- assert() will throw this, so it's easier to find the check that failed
+  end
+  
+  -- Test input value type checking
+  assert(check_error(
+    function ()
+      return test.perform_simple_test(123, function()end, {})
+    end,
+    "name must be a string"
+  ))
+
+  assert(check_error(
+    function ()
+      return test.perform_simple_test("", 123, {})
+    end,
+    "func must be a function"
+  ))
+
+  -- Test elided input
+  local return_values = {xpcall(
+    function ()
+      return test.perform_simple_test("name", function()end)
+    end,
+    debug.traceback
+  )}
+  if not (
+          return_values[1] == true and
+          type(return_values[2]) == "table" and
+          type(return_values[2].xpcall_return) == "table"
+         )
+     then
+    error("input should be optional for perform_simple_test, but isn't")
+  end
+
+  -- Test a failing, silent function
+  local function failing_silent ()
+    return false
+  end
+
+  -- NOTE: Need to validate the returned table's contents
+  assert(xpcall(
+    function ()
+      return test.perform_simple_test("name", failing_silent)
+    end,
+    debug.traceback
+  ))
+  -- Test a failing, chatty function
+  local function
+  -- Test a succeeding, silent function
+  -- Test a succeeding, chatty function
+  -- Test an erroring, silent function
+  -- Test an erroring, chatty function
+    
+end
 
 rock.test_summarize_test_results_failures = function ()
   local function example_function () end

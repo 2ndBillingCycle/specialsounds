@@ -137,7 +137,7 @@ rock.run_case_tests = function ()
   -- For each case suite, run through the test cases, and perform the test
   local tests = require "tests"
   for name, case_table in pairs(tests) do
-    if type(case_table) == "table" and name:match("^case_.+") then
+    if type(case_table) == "table" then
       emit.print("Function: %s", case_table.name)
       for i,test_case in ipairs(case_table) do
         if type(test_case) == "table" then
@@ -191,7 +191,7 @@ end
 rock.run_test_functions = function ()
   local tests = require "tests"
   for name,func in pairs(tests) do
-    if type(func) == "function" and name:match("^test_.+") then
+    if type(func) == "function" then
       local func_name = name:match "^test_(.+)"
       emit.print(func_name)
       rock.add_result(
@@ -225,7 +225,7 @@ end
 
 -- If this was run as a script: lua test.lua,
 -- then just run the main function
-if _G.arg and type(arg[0]) == "string" and (arg[0]):match("test") then
+if _G.arg and type(arg[0]) == "string" and arg[0]:match("test") then
   assert(rock.run())
 end
 return rock
