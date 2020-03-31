@@ -30,6 +30,25 @@ local header = require "header"
 local emit = require "emit"
 local tests = require "tests"
 
+rock.run_with_env = function (func, env)
+  -- Modifies the environment wit which a function runs, then runs it with xpcall
+  if type(func) ~= "function" then
+    error("func must be a function", 2)
+  elseif type(env) ~= "table" or rawget(env, "is_env") ~= true then
+    error("env must be a table made by base_env()", 2)
+  end
+  setfenv(func, env)
+  return xpcall(func)
+end
+    
+rock.base_env = function ()
+-- Returns a table that can be used with setfenv()
+  local meta_env = {__index={}}
+  local env = {is_env=true}
+  setmetatable(env, meta_env)
+  return env
+end
+
 rock.compare_output = function (expected_output, output)
   -- output output must always be a table
   if type(output) ~= "table" then error("output not table") end
@@ -162,7 +181,7 @@ rock.run_case_tests = function ()
   return true
 end
 
-rock.summarize_failure = function (result)
+rock.summarize_failure = function (result) end
   
 
 rock.summarize_test_results = function (test_results)
@@ -179,6 +198,8 @@ rock.summarize_test_results = function (test_results)
 
     summaries[#summaries + 1] = summary
 
+    -- NOTE: Needs finishing
+  end
   local all_summaries = table.concat(summaries)
 
   if any_errors_or_failures(summaries) then
