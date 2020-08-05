@@ -16,7 +16,7 @@ name: Build and test
 #      - reopened
 #      - closed
 #    branch:
-#      - master
+#      - main
 
 jobs:
   build_test_and_maybe_release:
