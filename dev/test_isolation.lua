@@ -5,8 +5,7 @@ rock.shadow_table = function (tbl)
     error("tbl must be a table", 2)
   end
   local shadow_tbl = {}
-  local mt = {__index=tbl}
-  setmetatable(shadow_tbl, mt)
+  setmetatable(shadow_tbl, {__index=tbl})
   return shadow_tbl
 end
 
@@ -59,14 +58,14 @@ rock.shadow_module = function (mod)
       end
     end
     if not name then
-      error("module must be loaded", 2)
+      error("module must be in package.loaded", 2)
     end
   else
-    error('mod must be the module as returned by require("mod") or a module name as a string')
+    error('mod must be the module as returned by require("mod") or a module name as a string', 2)
   end
 
   if not rock.requireable(name) then
-    error("mod must be able to be require()'d")
+    error("mod must be able to be require()'d", 2)
   end
 
   local our_mod = require(name)
@@ -95,7 +94,7 @@ end
     
 rock.empty_env = function ()
 -- Returns a table that can be used with setfenv()
-  local meta_env = {__index={}, is_env=true}
+  local meta_env = {__index={}, ___is_env=true}
   local env = {}
   env._G = env
   setmetatable(env, meta_env)

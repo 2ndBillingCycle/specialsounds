@@ -6,6 +6,7 @@ package.preload.mod = function (...)
       g[k] = v
     end
   end
+  g["_G"] = g
   local ns = {}
   setmetatable(ns, {__index = g})
   setfenv(1, ns)
